@@ -90,6 +90,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--follow-search-delay", type=float, default=0.75)
     parser.add_argument("--follow-search-sweep-seconds", type=float, default=6.0)
     parser.add_argument("--follow-search-turn", type=float, default=0.35)
+    parser.add_argument(
+        "--follow-vr-turn-buttons",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pulse VRChat turn buttons so comfort turning works in VR mode",
+    )
+    parser.add_argument(
+        "--follow-vr-turn-pulse-seconds",
+        type=float,
+        default=0.5,
+    )
     parser.add_argument("--follow-relocate-turn-seconds", type=float, default=1.0)
     parser.add_argument("--follow-relocate-forward-seconds", type=float, default=1.0)
     parser.add_argument("--follow-relocate-forward", type=float, default=0.2)
@@ -267,6 +278,8 @@ def main() -> None:
             host=args.host,
             port=args.vrchat_port,
             dry_run=args.dry_run,
+            turn_buttons=args.follow_vr_turn_buttons,
+            turn_pulse_interval_seconds=args.follow_vr_turn_pulse_seconds,
         )
     else:
         observation_store = None
