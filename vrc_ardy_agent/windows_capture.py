@@ -18,12 +18,24 @@ class WindowInfo:
     minimized: bool
 
 
-def choose_window(windows: Iterable[WindowInfo], *, title: str) -> WindowInfo | None:
-    normalized_title = title.strip().casefold()
-    if not normalized_title:
+def choose_window(
+    windows: Iterable[WindowInfo],
+    *,
+    title: str | None = None,
+    process_id: int | None = None,
+) -> WindowInfo | None:
+    normalized_title = title.strip().casefold() if title is not None else None
+    if normalized_title == "":
         raise ValueError("title must not be empty")
+    if process_id is not None and process_id <= 0:
+        raise ValueError("process_id must be positive")
+    if normalized_title is None and process_id is None:
+        raise ValueError("title or process_id is required")
     candidates = [
-        window for window in windows if normalized_title in window.title.casefold()
+        window
+        for window in windows
+        if (normalized_title is None or normalized_title in window.title.casefold())
+        and (process_id is None or window.process_id == process_id)
     ]
     if not candidates:
         return None
@@ -31,7 +43,8 @@ def choose_window(windows: Iterable[WindowInfo], *, title: str) -> WindowInfo | 
         candidates,
         key=lambda window: (
             not window.minimized,
-            window.title.casefold() == normalized_title,
+            normalized_title is not None
+            and window.title.casefold() == normalized_title,
             window.width * window.height,
             -window.hwnd,
         ),
@@ -40,7 +53,8 @@ def choose_window(windows: Iterable[WindowInfo], *, title: str) -> WindowInfo | 
 
 def wait_for_window(
     *,
-    title: str,
+    title: str | None = None,
+    process_id: int | None = None,
     timeout_seconds: float | None = None,
     poll_interval_seconds: float = 0.5,
     heartbeat_interval_seconds: float = 2.0,
@@ -55,9 +69,13 @@ def wait_for_window(
         raise ValueError("poll_interval_seconds must be positive")
     if heartbeat_interval_seconds <= 0:
         raise ValueError("heartbeat_interval_seconds must be positive")
-    normalized_title = title.strip()
-    if not normalized_title:
+    normalized_title = title.strip() if title is not None else None
+    if normalized_title == "":
         raise ValueError("title must not be empty")
+    if process_id is not None and process_id <= 0:
+        raise ValueError("process_id must be positive")
+    if normalized_title is None and process_id is None:
+        raise ValueError("title or process_id is required")
 
     enumerate_now = enumerate_windows or list_windows
     started_at = monotonic()
@@ -66,6 +84,7 @@ def wait_for_window(
         selected = choose_window(
             enumerate_now(title_filter=normalized_title),
             title=normalized_title,
+            process_id=process_id,
         )
         if selected is not None:
             return selected
@@ -73,8 +92,13 @@ def wait_for_window(
         now = monotonic()
         elapsed = now - started_at
         if timeout_seconds is not None and elapsed >= timeout_seconds:
+            selector = (
+                f"title {normalized_title!r}"
+                if normalized_title is not None
+                else f"process id {process_id}"
+            )
             raise TimeoutError(
-                f"window matching {normalized_title!r} did not appear within "
+                f"window matching {selector} did not appear within "
                 f"{timeout_seconds:.1f} seconds"
             )
         if now >= next_heartbeat:

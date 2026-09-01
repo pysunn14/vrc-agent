@@ -115,6 +115,7 @@ def _add_tracking_arguments(parser: argparse.ArgumentParser) -> None:
     window_selector = parser.add_mutually_exclusive_group(required=True)
     window_selector.add_argument("--hwnd", type=_parse_hwnd)
     window_selector.add_argument("--window-title")
+    window_selector.add_argument("--window-process-id", type=_parse_hwnd)
     parser.add_argument("--window-wait-timeout", type=float, default=None)
     parser.add_argument("--mac-host", required=True)
     parser.add_argument("--port", type=int, default=9200)
@@ -204,19 +205,26 @@ def _windows_nameplate(args: argparse.Namespace) -> None:
 def _windows_track(args: argparse.Namespace) -> None:
     hwnd = args.hwnd
     if hwnd is None:
+        selector = (
+            f"title={args.window_title!r}"
+            if args.window_title is not None
+            else f"process_id={args.window_process_id}"
+        )
         window = wait_for_window(
             title=args.window_title,
+            process_id=args.window_process_id,
             timeout_seconds=args.window_wait_timeout,
             heartbeat=lambda elapsed: _print_json(
                 {
                     "event": "window_wait_heartbeat",
                     "title": args.window_title,
+                    "process_id": args.window_process_id,
                     "elapsed_seconds": elapsed,
                 }
             ),
         )
         hwnd = window.hwnd
-        _print_json({"event": "window_found", **asdict(window)})
+        _print_json({"event": "window_found", "selector": selector, **asdict(window)})
 
     nameplate_tracker = None
     if args.target_name:

@@ -76,6 +76,24 @@ class WindowSelectionTests(unittest.TestCase):
                 sleep=sleep,
             )
 
+    def test_wait_for_window_can_select_process_id(self):
+        windows = [
+            WindowInfo(101, "VRChat", 10, 1280, 720, False),
+            WindowInfo(202, "VRChat", 20, 1920, 1080, False),
+        ]
+
+        selected = wait_for_window(
+            process_id=20,
+            timeout_seconds=1.0,
+            enumerate_windows=lambda **_kwargs: windows,
+        )
+
+        self.assertEqual(selected.hwnd, 202)
+
+    def test_wait_for_window_rejects_missing_selector(self):
+        with self.assertRaisesRegex(ValueError, "title or process_id"):
+            wait_for_window(timeout_seconds=1.0)
+
 
 class _CopyableFrame:
     def __init__(self, value: int) -> None:

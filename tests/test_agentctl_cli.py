@@ -39,6 +39,20 @@ class AgentctlCliTests(unittest.TestCase):
         self.assertEqual(args.proximity, 0.2)
         self.assertEqual(args.source, "nameplate")
 
+    def test_track_accepts_window_process_id(self):
+        args = build_parser().parse_args(
+            [
+                "windows",
+                "track",
+                "--window-process-id",
+                "22044",
+                "--mac-host",
+                "100.64.0.1",
+            ]
+        )
+
+        self.assertEqual(args.window_process_id, 22044)
+
 
 if __name__ == "__main__":
     unittest.main()

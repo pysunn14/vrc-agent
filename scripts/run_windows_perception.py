@@ -52,6 +52,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--window-title",
         help="Case-insensitive title substring; waits until a matching window appears",
     )
+    window_selector.add_argument(
+        "--window-process-id",
+        type=parse_hwnd,
+        help="Process id whose top-level window should be captured",
+    )
     run_parser.add_argument("--window-wait-timeout", type=float, default=None)
     run_parser.add_argument("--mac-host", required=True, help="Mac LAN or Tailscale address")
     run_parser.add_argument("--port", type=int, default=9200)
@@ -124,12 +129,18 @@ def main() -> None:
 
     hwnd = args.hwnd
     if hwnd is None:
-        print(f"waiting for window title={args.window_title!r}", flush=True)
+        selector = (
+            f"title={args.window_title!r}"
+            if args.window_title is not None
+            else f"process_id={args.window_process_id}"
+        )
+        print(f"waiting for window {selector}", flush=True)
         window = wait_for_window(
             title=args.window_title,
+            process_id=args.window_process_id,
             timeout_seconds=args.window_wait_timeout,
             heartbeat=lambda elapsed: print(
-                f"heartbeat: waiting_for_window={args.window_title!r} elapsed={elapsed:.1f}s",
+                f"heartbeat: waiting_for_window={selector} elapsed={elapsed:.1f}s",
                 flush=True,
             ),
         )

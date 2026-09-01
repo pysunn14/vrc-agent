@@ -31,6 +31,19 @@ class WindowsPerceptionCliTests(unittest.TestCase):
         self.assertEqual(args.nameplate_scan_interval, 5.0)
         self.assertEqual(args.nameplate_anchor_max_age, 120.0)
 
+    def test_run_accepts_window_process_id(self):
+        args = build_parser().parse_args(
+            [
+                "run",
+                "--window-process-id",
+                "22044",
+                "--mac-host",
+                "127.0.0.1",
+            ]
+        )
+
+        self.assertEqual(args.window_process_id, 22044)
+
     def test_run_requires_exactly_one_window_selector(self):
         parser = build_parser()
 
