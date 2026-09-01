@@ -141,6 +141,7 @@ class AsyncNameplateTracker:
         self._pending_anchor: tuple[NameplateMatch, Any, float] | None = None
         self._active_match: NameplateMatch | None = None
         self._anchor_completed_monotonic: float | None = None
+        self._visual_lock_healthy = False
         self._next_submit_monotonic = float("-inf")
         self._status = NameplateTrackerStatus()
 
@@ -157,6 +158,7 @@ class AsyncNameplateTracker:
             self._pending_anchor = None
             self._active_match = None
             self._anchor_completed_monotonic = None
+            self._visual_lock_healthy = False
             self._next_submit_monotonic = float("-inf")
             self._stop_event.clear()
             self._wake_event.clear()
@@ -177,6 +179,8 @@ class AsyncNameplateTracker:
         observed = float(observed_monotonic)
         with self._lock:
             if self._thread is None or not self._status.running:
+                return False
+            if self._visual_lock_healthy:
                 return False
             if self._status.scanning or self._pending is not None:
                 return False
@@ -212,6 +216,7 @@ class AsyncNameplateTracker:
                 with self._lock:
                     self._active_match = active_match
                     self._anchor_completed_monotonic = anchor_completed
+                    self._visual_lock_healthy = False
             if active_match is None or anchor_completed is None:
                 return None
             if now - anchor_completed > self.max_anchor_age_seconds:
@@ -219,6 +224,7 @@ class AsyncNameplateTracker:
                 with self._lock:
                     self._active_match = None
                     self._anchor_completed_monotonic = None
+                    self._visual_lock_healthy = False
                 return None
             located = self.visual_locator.locate(frame)
         except BaseException as exc:
@@ -233,6 +239,7 @@ class AsyncNameplateTracker:
             raise
         score = float(located[1]) if located is not None else None
         with self._lock:
+            self._visual_lock_healthy = located is not None
             self._status = replace(
                 self._status,
                 visual_updates=self._status.visual_updates + 1,
@@ -266,6 +273,7 @@ class AsyncNameplateTracker:
             self._thread = None
             self._pending = None
             self._pending_anchor = None
+            self._visual_lock_healthy = False
             self._status = replace(
                 self._status,
                 running=False,
@@ -311,6 +319,7 @@ class AsyncNameplateTracker:
         except BaseException as exc:
             with self._lock:
                 self._pending_anchor = None
+                self._visual_lock_healthy = False
                 self._status = replace(
                     self._status,
                     running=False,

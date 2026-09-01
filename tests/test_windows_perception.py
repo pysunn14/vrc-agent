@@ -113,11 +113,13 @@ class _NameplateStatus:
 class _InitialNameplateTracker:
     def __init__(self) -> None:
         self.status = _NameplateStatus()
+        self.submit_calls = 0
 
     def start(self) -> None:
         pass
 
     def submit(self, _frame, *, observed_monotonic: float) -> bool:
+        self.submit_calls += 1
         return True
 
     def locate(self, _frame, *, now_monotonic: float):
@@ -125,6 +127,19 @@ class _InitialNameplateTracker:
 
     def stop(self) -> None:
         self.status.running = False
+
+
+class _ReadyNameplateTracker(_InitialNameplateTracker):
+    def __init__(self) -> None:
+        super().__init__()
+        self.status.scanning = False
+        self.status.scans_completed = 1
+
+
+class _AlwaysBodyTracker(_Tracker):
+    def track(self, _frame):
+        self.calls += 1
+        return [_detection(track_id=4, bbox=(50, 10, 150, 90))]
 
 
 class WindowsPerceptionRunnerTests(unittest.TestCase):
@@ -169,6 +184,20 @@ class WindowsPerceptionRunnerTests(unittest.TestCase):
         self.assertEqual(tracker.calls, 0)
         self.assertEqual(status.person_inference_skipped, 1)
         self.assertFalse(sender.observations[0].visible)
+
+    def test_runner_suspends_ocr_while_body_target_remains_visible(self):
+        nameplate = _ReadyNameplateTracker()
+        runner = WindowsPerceptionRunner(
+            capture=_Capture(),
+            tracker=_AlwaysBodyTracker(),
+            selector=TargetFusionSelector(),
+            sender=_Sender(),
+            nameplate_tracker=nameplate,  # type: ignore[arg-type]
+        )
+
+        runner.run(max_frames=2, heartbeat_interval_seconds=1.0)
+
+        self.assertEqual(nameplate.submit_calls, 1)
 
 
 if __name__ == "__main__":

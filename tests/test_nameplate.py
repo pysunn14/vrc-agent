@@ -160,6 +160,41 @@ class AsyncNameplateTrackerTests(unittest.TestCase):
             release.set()
             tracker.stop()
 
+    def test_healthy_visual_lock_suspends_ocr_until_visual_tracking_is_lost(self):
+        locator = _VisualLocator()
+        tracker = AsyncNameplateTracker(
+            reader=_Reader(),
+            matcher=NameplateMatcher("TargetUser 28"),
+            visual_locator=locator,
+            scan_interval_seconds=0.01,
+            max_anchor_age_seconds=1.0,
+        )
+        tracker.start()
+        try:
+            submitted_at = time.monotonic()
+            self.assertTrue(
+                tracker.submit(_Frame(), observed_monotonic=submitted_at)
+            )
+            deadline = time.monotonic() + 1.0
+            while tracker.status.scans_completed == 0 and time.monotonic() < deadline:
+                time.sleep(0.01)
+
+            now = time.monotonic()
+            self.assertIsNotNone(tracker.locate(_Frame(), now_monotonic=now))
+            self.assertFalse(
+                tracker.submit(_Frame(), observed_monotonic=now + 1.0)
+            )
+
+            locator.result = None
+            self.assertIsNone(
+                tracker.locate(_Frame(), now_monotonic=now + 0.01)
+            )
+            self.assertTrue(
+                tracker.submit(_Frame(), observed_monotonic=now + 1.0)
+            )
+        finally:
+            tracker.stop()
+
     def test_worker_exposes_reader_failure_and_stops(self):
         tracker = AsyncNameplateTracker(
             reader=_Reader(error=RuntimeError("ocr failed")),

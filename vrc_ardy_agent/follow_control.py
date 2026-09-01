@@ -18,7 +18,7 @@ class FollowState(str, Enum):
 
 @dataclass(frozen=True)
 class FollowConfig:
-    stale_after_seconds: float = 0.3
+    stale_after_seconds: float = 1.0
     active_search: bool = True
     search_delay_seconds: float = 0.75
     search_sweep_seconds: float = 6.0

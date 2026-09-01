@@ -183,7 +183,7 @@ class WindowsPerceptionRunner:
                     continue
 
                 frame_observed = time.monotonic()
-                if self.nameplate_tracker is not None:
+                if self.nameplate_tracker is not None and self._should_submit_nameplate():
                     self.nameplate_tracker.submit(
                         frame,
                         observed_monotonic=frame_observed,
@@ -266,6 +266,13 @@ class WindowsPerceptionRunner:
             and status.frames_submitted > 0
             and status.scans_completed == 0
         )
+
+    def _should_submit_nameplate(self) -> bool:
+        with self._lock:
+            return not (
+                self._status.target_visible
+                and self._status.target_source == TargetSource.BODY
+            )
 
     def _emit_heartbeat_if_due(
         self,

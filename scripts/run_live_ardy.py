@@ -80,7 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--follow-bind-host", default="0.0.0.0")
     parser.add_argument("--follow-port", type=int, default=9200)
     parser.add_argument("--follow-tick-hz", type=float, default=20.0)
-    parser.add_argument("--follow-stale-seconds", type=float, default=0.3)
+    parser.add_argument("--follow-stale-seconds", type=float, default=1.0)
     parser.add_argument(
         "--follow-active-search",
         action=argparse.BooleanOptionalAction,

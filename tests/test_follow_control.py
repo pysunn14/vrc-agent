@@ -41,6 +41,9 @@ def _received(
 
 
 class FollowControllerTests(unittest.TestCase):
+    def test_default_staleness_tolerates_normal_cpu_perception_latency(self):
+        self.assertEqual(FollowConfig().stale_after_seconds, 1.0)
+
     def setUp(self) -> None:
         self.controller = FollowController(
             FollowConfig(
