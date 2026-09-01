@@ -17,14 +17,14 @@ from vrc_ardy_agent.follow_runtime import (
     FollowPromptRouter,
     LatestDecisionStore,
 )
-from vrc_ardy_agent.follow_sink import VrchatLocomotionSink
+from vrc_ardy_agent.follow_sink import VmtLocomotionSink, VrchatLocomotionSink
 from vrc_ardy_agent.live_control import IDLE_PROMPT, apply_control_line
 from vrc_ardy_agent.live_session import LiveArdySession, LiveSessionStatus
 from vrc_ardy_agent.live_sink import SixPointUdpSink
 from vrc_ardy_agent.stream_bridge import SixPointStreamMapper
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run resident ARDY autoregressive generation directly into VRChat without NPZ files."
     )
@@ -91,15 +91,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--follow-search-sweep-seconds", type=float, default=6.0)
     parser.add_argument("--follow-search-turn", type=float, default=0.35)
     parser.add_argument(
-        "--follow-vr-turn-buttons",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Pulse VRChat turn buttons so comfort turning works in VR mode",
+        "--follow-output",
+        choices=("vmt", "vrchat-osc"),
+        default="vmt",
+        help="Drive the active VMT hand controllers or VRChat OSC input",
     )
     parser.add_argument(
-        "--follow-vr-turn-pulse-seconds",
+        "--follow-osc-turn-buttons",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pulse VRChat turn buttons when --follow-output=vrchat-osc",
+    )
+    parser.add_argument(
+        "--follow-turn-pulse-seconds",
         type=float,
         default=0.5,
+        help="Interval between comfort-turn input pulses",
     )
     parser.add_argument("--follow-relocate-turn-seconds", type=float, default=1.0)
     parser.add_argument("--follow-relocate-forward-seconds", type=float, default=1.0)
@@ -132,7 +139,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--full-turn-speed-dps", type=float, default=180.0)
     parser.add_argument("--turn-deadzone-dps", type=float, default=12.0)
     parser.add_argument("--heading-smoothing-seconds", type=float, default=0.5)
-    return parser.parse_args()
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def print_heartbeat(status: LiveSessionStatus) -> None:
@@ -263,7 +274,7 @@ def main() -> None:
     receiver: UdpObservationReceiver | None = None
     follow_loop: FollowDecisionLoop | None = None
     decision_store: LatestDecisionStore | None = None
-    locomotion_sink: VrchatLocomotionSink | None = None
+    locomotion_sink: VrchatLocomotionSink | VmtLocomotionSink | None = None
     if args.follow:
         observation_store = LatestObservationStore(
             session_takeover_after_seconds=args.follow_stale_seconds,
@@ -274,13 +285,23 @@ def main() -> None:
             store=observation_store,
         )
         decision_store = LatestDecisionStore()
-        locomotion_sink = VrchatLocomotionSink(
-            host=args.host,
-            port=args.vrchat_port,
-            dry_run=args.dry_run,
-            turn_buttons=args.follow_vr_turn_buttons,
-            turn_pulse_interval_seconds=args.follow_vr_turn_pulse_seconds,
-        )
+        if args.follow_output == "vmt":
+            locomotion_sink = VmtLocomotionSink(
+                host=args.host,
+                port=args.vmt_port,
+                left_controller_index=args.left_vmt_index,
+                right_controller_index=args.right_vmt_index,
+                dry_run=args.dry_run,
+                turn_pulse_interval_seconds=args.follow_turn_pulse_seconds,
+            )
+        else:
+            locomotion_sink = VrchatLocomotionSink(
+                host=args.host,
+                port=args.vrchat_port,
+                dry_run=args.dry_run,
+                turn_buttons=args.follow_osc_turn_buttons,
+                turn_pulse_interval_seconds=args.follow_turn_pulse_seconds,
+            )
     else:
         observation_store = None
 
