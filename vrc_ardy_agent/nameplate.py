@@ -8,6 +8,8 @@ import threading
 import time
 from typing import Any, Iterable, Protocol
 
+from .nameplate_visual import NameplateVisualLocator, OpenCvTemplateNameplateLocator
+
 
 class TextReader(Protocol):
     def read(self, frame: Any) -> list["OcrTextRegion"]: ...
@@ -104,6 +106,9 @@ class NameplateTrackerStatus:
     frames_submitted: int = 0
     scans_completed: int = 0
     matches_found: int = 0
+    visual_updates: int = 0
+    visual_matches_found: int = 0
+    last_visual_score: float | None = None
     last_scan_seconds: float | None = None
     last_error: str | None = None
     heartbeat_monotonic: float = 0.0
@@ -117,21 +122,25 @@ class AsyncNameplateTracker:
         *,
         reader: TextReader,
         matcher: NameplateMatcher,
-        scan_interval_seconds: float = 0.5,
-        max_result_age_seconds: float = 1.0,
+        visual_locator: NameplateVisualLocator | None = None,
+        scan_interval_seconds: float = 5.0,
+        max_anchor_age_seconds: float = 60.0,
     ) -> None:
-        if scan_interval_seconds <= 0 or max_result_age_seconds <= 0:
+        if scan_interval_seconds <= 0 or max_anchor_age_seconds <= 0:
             raise ValueError("nameplate timing values must be positive")
         self.reader = reader
         self.matcher = matcher
+        self.visual_locator = visual_locator or OpenCvTemplateNameplateLocator()
         self.scan_interval_seconds = float(scan_interval_seconds)
-        self.max_result_age_seconds = float(max_result_age_seconds)
+        self.max_anchor_age_seconds = float(max_anchor_age_seconds)
         self._lock = threading.Lock()
         self._wake_event = threading.Event()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._pending: tuple[Any, float] | None = None
-        self._latest: ObservedNameplate | None = None
+        self._pending_anchor: tuple[NameplateMatch, Any, float] | None = None
+        self._active_match: NameplateMatch | None = None
+        self._anchor_completed_monotonic: float | None = None
         self._next_submit_monotonic = float("-inf")
         self._status = NameplateTrackerStatus()
 
@@ -145,7 +154,9 @@ class AsyncNameplateTracker:
             if self._thread is not None:
                 raise RuntimeError("nameplate tracker is already started")
             self._pending = None
-            self._latest = None
+            self._pending_anchor = None
+            self._active_match = None
+            self._anchor_completed_monotonic = None
             self._next_submit_monotonic = float("-inf")
             self._stop_event.clear()
             self._wake_event.clear()
@@ -154,6 +165,7 @@ class AsyncNameplateTracker:
                 running=True,
                 heartbeat_monotonic=now,
             )
+            self.visual_locator.reset()
             self._thread = threading.Thread(
                 target=self._run,
                 name="nameplate-ocr",
@@ -165,6 +177,8 @@ class AsyncNameplateTracker:
         observed = float(observed_monotonic)
         with self._lock:
             if self._thread is None or not self._status.running:
+                return False
+            if self._status.scanning or self._pending is not None:
                 return False
             if observed < self._next_submit_monotonic:
                 return False
@@ -179,14 +193,68 @@ class AsyncNameplateTracker:
         self._wake_event.set()
         return True
 
-    def snapshot(self, *, now_monotonic: float) -> ObservedNameplate | None:
+    def locate(
+        self,
+        frame: Any,
+        *,
+        now_monotonic: float,
+    ) -> ObservedNameplate | None:
+        now = float(now_monotonic)
         with self._lock:
-            latest = self._latest
-        if latest is None:
+            pending_anchor = self._pending_anchor
+            self._pending_anchor = None
+            active_match = self._active_match
+            anchor_completed = self._anchor_completed_monotonic
+        try:
+            if pending_anchor is not None:
+                active_match, anchor_frame, anchor_completed = pending_anchor
+                self.visual_locator.anchor(anchor_frame, active_match.bbox_xyxy)
+                with self._lock:
+                    self._active_match = active_match
+                    self._anchor_completed_monotonic = anchor_completed
+            if active_match is None or anchor_completed is None:
+                return None
+            if now - anchor_completed > self.max_anchor_age_seconds:
+                self.visual_locator.reset()
+                with self._lock:
+                    self._active_match = None
+                    self._anchor_completed_monotonic = None
+                return None
+            located = self.visual_locator.locate(frame)
+        except BaseException as exc:
+            self._stop_event.set()
+            with self._lock:
+                self._status = replace(
+                    self._status,
+                    running=False,
+                    last_error=str(exc),
+                    heartbeat_monotonic=time.monotonic(),
+                )
+            raise
+        score = float(located[1]) if located is not None else None
+        with self._lock:
+            self._status = replace(
+                self._status,
+                visual_updates=self._status.visual_updates + 1,
+                visual_matches_found=(
+                    self._status.visual_matches_found + int(located is not None)
+                ),
+                last_visual_score=score,
+                heartbeat_monotonic=time.monotonic(),
+            )
+        if located is None:
             return None
-        if float(now_monotonic) - latest.observed_monotonic > self.max_result_age_seconds:
-            return None
-        return latest
+        bbox, visual_score = located
+        return ObservedNameplate(
+            match=NameplateMatch(
+                target_name=active_match.target_name,
+                recognized_text=active_match.recognized_text,
+                bbox_xyxy=bbox,
+                confidence=active_match.confidence * float(visual_score),
+                match_score=active_match.match_score,
+            ),
+            observed_monotonic=now,
+        )
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -197,6 +265,7 @@ class AsyncNameplateTracker:
         with self._lock:
             self._thread = None
             self._pending = None
+            self._pending_anchor = None
             self._status = replace(
                 self._status,
                 running=False,
@@ -228,14 +297,9 @@ class AsyncNameplateTracker:
                 match = self.matcher.match(regions)
                 finished = time.monotonic()
                 with self._lock:
-                    self._latest = (
-                        ObservedNameplate(
-                            match=match,
-                            observed_monotonic=observed_monotonic,
-                        )
-                        if match is not None
-                        else None
-                    )
+                    if match is not None:
+                        self._pending_anchor = (match, frame, finished)
+                    self._next_submit_monotonic = finished + self.scan_interval_seconds
                     self._status = replace(
                         self._status,
                         scanning=False,
@@ -246,7 +310,7 @@ class AsyncNameplateTracker:
                     )
         except BaseException as exc:
             with self._lock:
-                self._latest = None
+                self._pending_anchor = None
                 self._status = replace(
                     self._status,
                     running=False,

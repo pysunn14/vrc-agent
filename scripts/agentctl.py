@@ -126,8 +126,8 @@ def _add_tracking_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--capture-interval-ms", type=int, default=50)
     parser.add_argument("--reacquire-frames", type=int, default=6)
     parser.add_argument("--target-name")
-    parser.add_argument("--nameplate-scan-interval", type=float, default=0.5)
-    parser.add_argument("--nameplate-max-age", type=float, default=2.0)
+    parser.add_argument("--nameplate-scan-interval", type=float, default=5.0)
+    parser.add_argument("--nameplate-anchor-max-age", type=float, default=60.0)
     parser.add_argument("--nameplate-match-threshold", type=float, default=0.72)
     parser.add_argument("--nameplate-input-width", type=int, default=960)
     parser.add_argument("--nameplate-model-dir")
@@ -230,7 +230,7 @@ def _windows_track(args: argparse.Namespace) -> None:
                 minimum_score=args.nameplate_match_threshold,
             ),
             scan_interval_seconds=args.nameplate_scan_interval,
-            max_result_age_seconds=args.nameplate_max_age,
+            max_anchor_age_seconds=args.nameplate_anchor_max_age,
         )
 
     runner = WindowsPerceptionRunner(

@@ -96,6 +96,9 @@ class PerceptionStatus:
     nameplate_scanning: bool = False
     nameplate_scans_completed: int = 0
     nameplate_matches_found: int = 0
+    nameplate_visual_updates: int = 0
+    nameplate_visual_matches_found: int = 0
+    last_nameplate_visual_score: float | None = None
     last_nameplate_scan_seconds: float | None = None
     nameplate_error: str | None = None
     last_error: str | None = None
@@ -189,7 +192,7 @@ class WindowsPerceptionRunner:
                 inference_seconds = time.monotonic() - inference_started
                 now = time.monotonic()
                 nameplate = (
-                    self.nameplate_tracker.snapshot(now_monotonic=now)
+                    self.nameplate_tracker.locate(frame, now_monotonic=now)
                     if self.nameplate_tracker is not None
                     else None
                 )
@@ -271,6 +274,9 @@ class WindowsPerceptionRunner:
                 nameplate_scanning=status.scanning,
                 nameplate_scans_completed=status.scans_completed,
                 nameplate_matches_found=status.matches_found,
+                nameplate_visual_updates=status.visual_updates,
+                nameplate_visual_matches_found=status.visual_matches_found,
+                last_nameplate_visual_score=status.last_visual_score,
                 last_nameplate_scan_seconds=status.last_scan_seconds,
                 nameplate_error=status.last_error,
             )

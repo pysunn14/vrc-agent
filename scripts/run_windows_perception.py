@@ -73,8 +73,8 @@ def _add_nameplate_arguments(parser: argparse.ArgumentParser) -> None:
         "--target-name",
         help="Exact VRChat display name; omit to use body tracking only",
     )
-    parser.add_argument("--nameplate-scan-interval", type=float, default=0.5)
-    parser.add_argument("--nameplate-max-age", type=float, default=2.0)
+    parser.add_argument("--nameplate-scan-interval", type=float, default=5.0)
+    parser.add_argument("--nameplate-anchor-max-age", type=float, default=60.0)
     parser.add_argument("--nameplate-match-threshold", type=float, default=0.72)
     parser.add_argument("--nameplate-input-width", type=int, default=960)
     parser.add_argument("--nameplate-model-dir")
@@ -97,6 +97,9 @@ def print_heartbeat(status: PerceptionStatus) -> None:
         f"ocr={'scanning' if status.nameplate_scanning else 'idle'} "
         f"ocr_scans={status.nameplate_scans_completed} "
         f"ocr_matches={status.nameplate_matches_found} "
+        f"visual_matches={status.nameplate_visual_matches_found}/"
+        f"{status.nameplate_visual_updates} "
+        f"visual_score={status.last_nameplate_visual_score or 0.0:.2f} "
         f"ocr_error={status.nameplate_error or '-'} "
         f"error={status.last_error or '-'}",
         flush=True,
@@ -159,7 +162,7 @@ def main() -> None:
                 minimum_score=args.nameplate_match_threshold,
             ),
             scan_interval_seconds=args.nameplate_scan_interval,
-            max_result_age_seconds=args.nameplate_max_age,
+            max_anchor_age_seconds=args.nameplate_anchor_max_age,
         )
 
     runner = WindowsPerceptionRunner(

@@ -28,7 +28,8 @@ class WindowsPerceptionCliTests(unittest.TestCase):
         )
 
         self.assertEqual(args.target_name, "TargetUser 28")
-        self.assertEqual(args.nameplate_scan_interval, 0.5)
+        self.assertEqual(args.nameplate_scan_interval, 5.0)
+        self.assertEqual(args.nameplate_anchor_max_age, 60.0)
 
     def test_run_requires_exactly_one_window_selector(self):
         parser = build_parser()
