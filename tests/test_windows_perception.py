@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import unittest
 
 from vrc_ardy_agent.windows_perception import (
@@ -95,6 +96,37 @@ class _Sender:
         self.closed = True
 
 
+@dataclass
+class _NameplateStatus:
+    running: bool = True
+    scanning: bool = True
+    frames_submitted: int = 1
+    scans_completed: int = 0
+    matches_found: int = 0
+    visual_updates: int = 0
+    visual_matches_found: int = 0
+    last_visual_score: float | None = None
+    last_scan_seconds: float | None = None
+    last_error: str | None = None
+
+
+class _InitialNameplateTracker:
+    def __init__(self) -> None:
+        self.status = _NameplateStatus()
+
+    def start(self) -> None:
+        pass
+
+    def submit(self, _frame, *, observed_monotonic: float) -> bool:
+        return True
+
+    def locate(self, _frame, *, now_monotonic: float):
+        return None
+
+    def stop(self) -> None:
+        self.status.running = False
+
+
 class WindowsPerceptionRunnerTests(unittest.TestCase):
     def test_runner_sends_visible_then_explicit_invisible_full_state(self):
         capture = _Capture()
@@ -119,6 +151,24 @@ class WindowsPerceptionRunnerTests(unittest.TestCase):
         self.assertEqual(sender.observations[0].proximity, 0.8)
         self.assertFalse(sender.observations[1].visible)
         self.assertIsNone(sender.observations[1].source)
+
+    def test_runner_gives_initial_nameplate_scan_priority_over_person_inference(self):
+        capture = _Capture()
+        tracker = _Tracker()
+        sender = _Sender()
+        runner = WindowsPerceptionRunner(
+            capture=capture,
+            tracker=tracker,
+            selector=TargetFusionSelector(),
+            sender=sender,
+            nameplate_tracker=_InitialNameplateTracker(),  # type: ignore[arg-type]
+        )
+
+        status = runner.run(max_frames=1, heartbeat_interval_seconds=1.0)
+
+        self.assertEqual(tracker.calls, 0)
+        self.assertEqual(status.person_inference_skipped, 1)
+        self.assertFalse(sender.observations[0].visible)
 
 
 if __name__ == "__main__":

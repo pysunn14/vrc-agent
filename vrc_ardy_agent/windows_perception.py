@@ -89,6 +89,7 @@ class PerceptionStatus:
     running: bool = False
     frames_processed: int = 0
     observations_sent: int = 0
+    person_inference_skipped: int = 0
     target_visible: bool = False
     target_source: TargetSource | None = None
     last_inference_seconds: float | None = None
@@ -187,9 +188,14 @@ class WindowsPerceptionRunner:
                         frame,
                         observed_monotonic=frame_observed,
                     )
-                inference_started = time.monotonic()
-                detections = self.tracker.track(frame)
-                inference_seconds = time.monotonic() - inference_started
+                prioritize_nameplate = self._initial_nameplate_scan_pending()
+                if prioritize_nameplate:
+                    detections = []
+                    inference_seconds = None
+                else:
+                    inference_started = time.monotonic()
+                    detections = self.tracker.track(frame)
+                    inference_seconds = time.monotonic() - inference_started
                 now = time.monotonic()
                 nameplate = (
                     self.nameplate_tracker.locate(frame, now_monotonic=now)
@@ -213,6 +219,10 @@ class WindowsPerceptionRunner:
                         self._status,
                         frames_processed=sequence,
                         observations_sent=self._status.observations_sent + 1,
+                        person_inference_skipped=(
+                            self._status.person_inference_skipped
+                            + int(prioritize_nameplate)
+                        ),
                         target_visible=observation.visible,
                         target_source=observation.source,
                         last_inference_seconds=inference_seconds,
@@ -245,6 +255,17 @@ class WindowsPerceptionRunner:
                     heartbeat_monotonic=time.monotonic(),
                 )
         return self.status
+
+    def _initial_nameplate_scan_pending(self) -> bool:
+        tracker = self.nameplate_tracker
+        if tracker is None:
+            return False
+        status = tracker.status
+        return (
+            status.running
+            and status.frames_submitted > 0
+            and status.scans_completed == 0
+        )
 
     def _emit_heartbeat_if_due(
         self,

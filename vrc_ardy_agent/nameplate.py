@@ -124,7 +124,7 @@ class AsyncNameplateTracker:
         matcher: NameplateMatcher,
         visual_locator: NameplateVisualLocator | None = None,
         scan_interval_seconds: float = 5.0,
-        max_anchor_age_seconds: float = 60.0,
+        max_anchor_age_seconds: float = 120.0,
     ) -> None:
         if scan_interval_seconds <= 0 or max_anchor_age_seconds <= 0:
             raise ValueError("nameplate timing values must be positive")

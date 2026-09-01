@@ -127,7 +127,7 @@ def _add_tracking_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--reacquire-frames", type=int, default=6)
     parser.add_argument("--target-name")
     parser.add_argument("--nameplate-scan-interval", type=float, default=5.0)
-    parser.add_argument("--nameplate-anchor-max-age", type=float, default=60.0)
+    parser.add_argument("--nameplate-anchor-max-age", type=float, default=120.0)
     parser.add_argument("--nameplate-match-threshold", type=float, default=0.72)
     parser.add_argument("--nameplate-input-width", type=int, default=960)
     parser.add_argument("--nameplate-model-dir")

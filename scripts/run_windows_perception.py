@@ -74,7 +74,7 @@ def _add_nameplate_arguments(parser: argparse.ArgumentParser) -> None:
         help="Exact VRChat display name; omit to use body tracking only",
     )
     parser.add_argument("--nameplate-scan-interval", type=float, default=5.0)
-    parser.add_argument("--nameplate-anchor-max-age", type=float, default=60.0)
+    parser.add_argument("--nameplate-anchor-max-age", type=float, default=120.0)
     parser.add_argument("--nameplate-match-threshold", type=float, default=0.72)
     parser.add_argument("--nameplate-input-width", type=int, default=960)
     parser.add_argument("--nameplate-model-dir")
@@ -91,6 +91,7 @@ def print_heartbeat(status: PerceptionStatus) -> None:
         "heartbeat: "
         f"frames={status.frames_processed} "
         f"sent={status.observations_sent} "
+        f"person_skipped={status.person_inference_skipped} "
         f"visible={status.target_visible} "
         f"source={status.target_source.value if status.target_source else '-'} "
         f"inference={inference} "
