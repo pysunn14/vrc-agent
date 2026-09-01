@@ -230,6 +230,9 @@ def main() -> None:
         right_enable=args.right_enable,
         body_enable=args.body_enable,
         send_locomotion=not args.no_locomotion and not args.follow,
+        # Follow perception observes the HMD view itself. Generated head rotation
+        # would move that sensor frame and can point the camera away from its target.
+        lock_head_rotation=args.follow,
         park_head_on_close=args.park_head_on_exit,
         dry_run=args.dry_run,
     )

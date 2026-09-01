@@ -28,6 +28,7 @@ class SixPointUdpSink:
         right_enable: int = 6,
         body_enable: int = 7,
         send_locomotion: bool = True,
+        lock_head_rotation: bool = False,
         park_head_on_close: bool = False,
         dry_run: bool = False,
         socket_factory: Callable[[], Any] | None = None,
@@ -45,6 +46,7 @@ class SixPointUdpSink:
         self.right_enable = int(right_enable)
         self.body_enable = int(body_enable)
         self.send_locomotion = bool(send_locomotion)
+        self.lock_head_rotation = bool(lock_head_rotation)
         self.park_head_on_close = bool(park_head_on_close)
         self.dry_run = bool(dry_run)
         self._closed = False
@@ -64,9 +66,10 @@ class SixPointUdpSink:
         if self._sock is None:
             raise RuntimeError("UDP socket is unavailable")
 
+        head_ypr = (0.0, 0.0, 0.0) if self.lock_head_rotation else frame.head.ypr_deg
         packets = [
             (
-                encode_opentrack_packet(*frame.head.xyz_cm, *frame.head.ypr_deg),
+                encode_opentrack_packet(*frame.head.xyz_cm, *head_ypr),
                 self.opentrack_port,
             ),
             (

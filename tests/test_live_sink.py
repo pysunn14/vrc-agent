@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import struct
 import unittest
 
 from vrc_ardy_agent.live_sink import SixPointUdpSink
@@ -20,14 +21,14 @@ class _FakeSocket:
         self.closed = True
 
 
-def _frame() -> SixPointFrame:
+def _frame(*, head_ypr: tuple[float, float, float] = (0.0, 0.0, 0.0)) -> SixPointFrame:
     tracker = VmtFrame(
         position=(0.0, 1.0, 0.0),
         quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
         fps=20.0,
     )
     return SixPointFrame(
-        head=OpenTrackFrame(xyz_cm=(0.0, 0.0, 0.0), ypr_deg=(0.0, 0.0, 0.0), fps=20.0),
+        head=OpenTrackFrame(xyz_cm=(1.0, 2.0, 3.0), ypr_deg=head_ypr, fps=20.0),
         left=tracker,
         right=tracker,
         hips=tracker,
@@ -42,6 +43,31 @@ def _frame() -> SixPointFrame:
 
 
 class SixPointUdpSinkTests(unittest.TestCase):
+    def test_head_rotation_lock_keeps_translation_and_sends_neutral_rotation(self):
+        sock = _FakeSocket()
+        sink = SixPointUdpSink(
+            host="192.0.2.10",
+            lock_head_rotation=True,
+            socket_factory=lambda: sock,
+        )
+
+        sink.send(_frame(head_ypr=(40.0, -30.0, 20.0)))
+
+        packet = next(packet for packet, target in sock.sent if target[1] == 4242)
+        self.assertEqual(struct.unpack("<6d", packet), (1.0, 2.0, 3.0, 0.0, 0.0, 0.0))
+
+    def test_head_rotation_is_preserved_without_lock(self):
+        sock = _FakeSocket()
+        sink = SixPointUdpSink(host="192.0.2.10", socket_factory=lambda: sock)
+
+        sink.send(_frame(head_ypr=(40.0, -30.0, 20.0)))
+
+        packet = next(packet for packet, target in sock.sent if target[1] == 4242)
+        self.assertEqual(
+            struct.unpack("<6d", packet),
+            (1.0, 2.0, 3.0, 40.0, -30.0, 20.0),
+        )
+
     def test_send_routes_pose_and_locomotion_to_expected_ports(self):
         sock = _FakeSocket()
         sink = SixPointUdpSink(
