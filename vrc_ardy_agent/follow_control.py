@@ -247,16 +247,15 @@ class FollowController:
         direction = self._search_direction * (1.0 if cycle_index % 2 == 0 else -1.0)
 
         if phase < self.config.search_sweep_seconds:
-            # Sweep to one side, across the starting heading, then back. This scans
-            # the full view without letting one search cycle accumulate body yaw.
-            sweep_progress = phase / self.config.search_sweep_seconds
-            sweep_direction = -direction if 0.25 <= sweep_progress < 0.75 else direction
+            # Keep turning for the whole sweep. Reversing inside one sweep only
+            # rocks the view around its starting heading and cannot find a target
+            # that is behind the avatar. The next cycle scans the other direction.
             self._state = FollowState.SEARCH
             return FollowDecision(
                 state=self._state,
                 horizontal=0.0,
                 vertical=0.0,
-                look_horizontal=sweep_direction * self.config.search_turn,
+                look_horizontal=direction * self.config.search_turn,
                 observation_age_seconds=observation_age_seconds,
                 target_center_error=None,
                 target_height=None,
