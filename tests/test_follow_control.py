@@ -13,6 +13,7 @@ def _received(
     center_x: float = 0.5,
     height: float = 0.3,
     visible: bool = True,
+    identity_scan_active: bool = False,
     received_at: float = 10.0,
 ) -> ReceivedObservation:
     if visible:
@@ -35,6 +36,7 @@ def _received(
             center_x=observed_center_x,
             proximity=proximity,
             confidence=confidence,
+            identity_scan_active=identity_scan_active,
         ),
         received_monotonic=received_at,
     )
@@ -110,6 +112,42 @@ class FollowControllerTests(unittest.TestCase):
         self.assertEqual(step_away.vertical, 0.2)
         self.assertEqual(next_scan.state, FollowState.SEARCH)
         self.assertEqual(next_scan.look_horizontal, -0.3)
+
+    def test_identity_scan_holds_still_without_consuming_search_time(self):
+        controller = FollowController(
+            FollowConfig(
+                smoothing_alpha=1.0,
+                search_delay_seconds=0.5,
+                search_sweep_seconds=4.0,
+                search_turn=0.3,
+                relocate_turn_seconds=1.0,
+                relocate_forward_seconds=1.0,
+                relocate_forward=0.2,
+            )
+        )
+
+        controller.step(_received(visible=False), now_monotonic=10.0)
+        searching = controller.step(_received(visible=False), now_monotonic=10.6)
+        observing = controller.step(
+            _received(visible=False, identity_scan_active=True, received_at=10.7),
+            now_monotonic=10.7,
+        )
+        still_observing = controller.step(
+            _received(visible=False, identity_scan_active=True, received_at=20.7),
+            now_monotonic=20.7,
+        )
+        resumed = controller.step(
+            _received(visible=False, received_at=20.8),
+            now_monotonic=20.8,
+        )
+
+        self.assertEqual(searching.state, FollowState.SEARCH)
+        self.assertEqual(observing.state, FollowState.OBSERVE)
+        self.assertEqual(still_observing.state, FollowState.OBSERVE)
+        self.assertEqual(observing.look_horizontal, 0.0)
+        self.assertEqual(observing.vertical, 0.0)
+        self.assertEqual(resumed.state, FollowState.SEARCH)
+        self.assertEqual(resumed.look_horizontal, 0.3)
 
     def test_reacquired_target_preempts_search_and_resets_loss_timer(self):
         controller = FollowController(

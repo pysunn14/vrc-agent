@@ -211,6 +211,13 @@ class WindowsPerceptionRunner:
                 observation = self._make_observation(
                     measurement=selected,
                     sequence=sequence,
+                    identity_scan_active=(
+                        prioritize_nameplate
+                        or (
+                            self.nameplate_tracker is not None
+                            and self.nameplate_tracker.status.scanning
+                        )
+                    ),
                 )
                 self.sender.send(observation)
                 sequence += 1
@@ -316,6 +323,7 @@ class WindowsPerceptionRunner:
         *,
         measurement: TargetMeasurement | None,
         sequence: int,
+        identity_scan_active: bool = False,
     ) -> TargetObservation:
         if measurement is None:
             return TargetObservation(
@@ -327,6 +335,7 @@ class WindowsPerceptionRunner:
                 center_x=None,
                 proximity=None,
                 confidence=0.0,
+                identity_scan_active=identity_scan_active,
             )
         return TargetObservation(
             session_id=self.session_id,
@@ -337,6 +346,7 @@ class WindowsPerceptionRunner:
             center_x=measurement.center_x,
             proximity=measurement.proximity,
             confidence=measurement.confidence,
+            identity_scan_active=identity_scan_active,
         )
 
 

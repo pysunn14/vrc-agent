@@ -9,6 +9,7 @@ from .follow_receiver import ReceivedObservation
 
 class FollowState(str, Enum):
     LOST = "lost"
+    OBSERVE = "observe"
     SEARCH = "search"
     RELOCATE = "relocate"
     ALIGN = "align"
@@ -105,6 +106,8 @@ class FollowController:
         self._smoothed_center_error: float | None = None
         self._smoothed_height: float | None = None
         self._lost_since_monotonic: float | None = None
+        self._search_paused_since_monotonic: float | None = None
+        self._search_paused_seconds = 0.0
         self._search_direction = 1.0
 
     @property
@@ -122,7 +125,17 @@ class FollowController:
 
         age = max(0.0, float(now_monotonic) - received.received_monotonic)
         observation = received.observation
-        if age > self.config.stale_after_seconds or not observation.visible:
+        if age > self.config.stale_after_seconds:
+            return self._lose_target(
+                now_monotonic=now_monotonic,
+                observation_age_seconds=age,
+            )
+        if not observation.visible:
+            if observation.identity_scan_active:
+                return self._observe_identity_scan(
+                    now_monotonic=now_monotonic,
+                    observation_age_seconds=age,
+                )
             return self._lose_target(
                 now_monotonic=now_monotonic,
                 observation_age_seconds=age,
@@ -137,7 +150,7 @@ class FollowController:
             )
 
         center_error = 2.0 * (center_x - 0.5)
-        self._lost_since_monotonic = None
+        self._reset_loss_timeline()
         if center_error != 0.0:
             self._search_direction = math.copysign(1.0, center_error)
         key = (observation.session_id, observation.sequence)
@@ -222,13 +235,19 @@ class FollowController:
         observation_age_seconds: float | None = None,
     ) -> FollowDecision:
         now = float(now_monotonic)
-        if self._lost_since_monotonic is None:
-            self._lost_since_monotonic = now
-        self._last_observation_key = None
-        self._smoothed_center_error = None
-        self._smoothed_height = None
+        self._prepare_for_missing_target(now)
+        if self._search_paused_since_monotonic is not None:
+            self._search_paused_seconds += max(
+                0.0,
+                now - self._search_paused_since_monotonic,
+            )
+            self._search_paused_since_monotonic = None
 
-        elapsed = max(0.0, now - self._lost_since_monotonic)
+        assert self._lost_since_monotonic is not None
+        elapsed = max(
+            0.0,
+            now - self._lost_since_monotonic - self._search_paused_seconds,
+        )
         if not self.config.active_search or elapsed < self.config.search_delay_seconds:
             self._state = FollowState.LOST
             return FollowDecision.neutral(
@@ -284,6 +303,36 @@ class FollowController:
             target_center_error=None,
             target_height=None,
         )
+
+    def _observe_identity_scan(
+        self,
+        *,
+        now_monotonic: float,
+        observation_age_seconds: float,
+    ) -> FollowDecision:
+        now = float(now_monotonic)
+        self._prepare_for_missing_target(now)
+        if self._search_paused_since_monotonic is None:
+            self._search_paused_since_monotonic = now
+        self._state = FollowState.OBSERVE
+        return FollowDecision.neutral(
+            self._state,
+            observation_age_seconds=observation_age_seconds,
+        )
+
+    def _prepare_for_missing_target(self, now_monotonic: float) -> None:
+        if self._lost_since_monotonic is None:
+            self._lost_since_monotonic = now_monotonic
+            self._search_paused_since_monotonic = None
+            self._search_paused_seconds = 0.0
+        self._last_observation_key = None
+        self._smoothed_center_error = None
+        self._smoothed_height = None
+
+    def _reset_loss_timeline(self) -> None:
+        self._lost_since_monotonic = None
+        self._search_paused_since_monotonic = None
+        self._search_paused_seconds = 0.0
 
 
 def _clamp(value: float, lower: float, upper: float) -> float:

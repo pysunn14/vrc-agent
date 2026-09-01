@@ -7,7 +7,7 @@ import math
 from typing import Any
 
 
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 MAX_PACKET_BYTES = 4096
 
 
@@ -48,6 +48,7 @@ class TargetObservation:
     center_x: float | None
     proximity: float | None
     confidence: float
+    identity_scan_active: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.session_id, str) or not self.session_id.strip():
@@ -62,6 +63,8 @@ class TargetObservation:
             raise FollowProtocolError("captured_at_ns must be non-negative")
         if not isinstance(self.visible, bool):
             raise FollowProtocolError("visible must be a boolean")
+        if not isinstance(self.identity_scan_active, bool):
+            raise FollowProtocolError("identity_scan_active must be a boolean")
 
         confidence = _require_number(self.confidence, "confidence")
         if not 0.0 <= confidence <= 1.0:
@@ -101,6 +104,7 @@ def encode_target_observation(observation: TargetObservation) -> bytes:
         "center_x": observation.center_x,
         "proximity": observation.proximity,
         "confidence": observation.confidence,
+        "identity_scan_active": observation.identity_scan_active,
     }
     packet = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
     if len(packet) > MAX_PACKET_BYTES:
@@ -130,9 +134,10 @@ def decode_target_observation(packet: bytes) -> TargetObservation:
         "center_x",
         "proximity",
         "confidence",
+        "identity_scan_active",
     }
     if set(payload) != expected_keys:
-        raise FollowProtocolError("packet fields do not match protocol version 2")
+        raise FollowProtocolError("packet fields do not match protocol version 3")
     if _require_plain_int(payload["version"], "version") != PROTOCOL_VERSION:
         raise FollowProtocolError(f"unsupported protocol version: {payload['version']!r}")
 
@@ -146,6 +151,7 @@ def decode_target_observation(packet: bytes) -> TargetObservation:
             center_x=payload["center_x"],
             proximity=payload["proximity"],
             confidence=_require_number(payload["confidence"], "confidence"),
+            identity_scan_active=payload["identity_scan_active"],
         )
     except (TypeError, ValueError, FollowProtocolError) as exc:
         if isinstance(exc, FollowProtocolError):

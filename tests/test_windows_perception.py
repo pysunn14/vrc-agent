@@ -184,6 +184,7 @@ class WindowsPerceptionRunnerTests(unittest.TestCase):
         self.assertEqual(tracker.calls, 0)
         self.assertEqual(status.person_inference_skipped, 1)
         self.assertFalse(sender.observations[0].visible)
+        self.assertTrue(sender.observations[0].identity_scan_active)
 
     def test_runner_suspends_ocr_while_body_target_remains_visible(self):
         nameplate = _ReadyNameplateTracker()

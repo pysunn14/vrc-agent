@@ -41,6 +41,7 @@ class FollowProtocolTests(unittest.TestCase):
             center_x=None,
             proximity=None,
             confidence=0.0,
+            identity_scan_active=True,
         )
 
         decoded = decode_target_observation(encode_target_observation(observation))
@@ -49,6 +50,7 @@ class FollowProtocolTests(unittest.TestCase):
         self.assertIsNone(decoded.source)
         self.assertIsNone(decoded.center_x)
         self.assertIsNone(decoded.proximity)
+        self.assertTrue(decoded.identity_scan_active)
 
     def test_invalid_or_unsupported_packets_are_rejected(self):
         invalid_packets = (

@@ -97,6 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=TargetSource.BODY.value,
     )
     inject.add_argument("--confidence", type=float, default=0.9)
+    inject.add_argument("--identity-scan-active", action="store_true")
     inject.add_argument("--repeat", type=int, default=1)
     inject.add_argument("--interval", type=float, default=0.05)
     inject.add_argument("--delay", type=float, default=0.0)
@@ -302,6 +303,7 @@ def _follow_inject(args: argparse.Namespace) -> None:
                 center_x=geometry[0] if visible else None,
                 proximity=geometry[1] if visible else None,
                 confidence=args.confidence if visible else 0.0,
+                identity_scan_active=args.identity_scan_active,
             )
             sender.send(observation)
             if args.json:
