@@ -86,7 +86,9 @@ class FollowDecisionLoopTests(unittest.TestCase):
             idle_prompt="idle",
         )
 
-        router(FollowState.LOST, FollowState.ALIGN)
+        router(FollowState.LOST, FollowState.SEARCH)
+        router(FollowState.SEARCH, FollowState.RELOCATE)
+        router(FollowState.RELOCATE, FollowState.ALIGN)
         router(FollowState.ALIGN, FollowState.FOLLOW)
         router(FollowState.FOLLOW, FollowState.HOLD)
         router(FollowState.HOLD, FollowState.LOST)

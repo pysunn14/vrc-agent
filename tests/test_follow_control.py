@@ -66,6 +66,80 @@ class FollowControllerTests(unittest.TestCase):
                 self.assertEqual(decision.vertical, 0.0)
                 self.assertEqual(decision.look_horizontal, 0.0)
 
+    def test_prolonged_loss_scans_then_relocates_before_scanning_again(self):
+        controller = FollowController(
+            FollowConfig(
+                smoothing_alpha=1.0,
+                search_delay_seconds=0.5,
+                search_sweep_seconds=4.0,
+                search_turn=0.3,
+                relocate_turn_seconds=1.0,
+                relocate_forward_seconds=1.0,
+                relocate_forward=0.2,
+            )
+        )
+
+        just_lost = controller.step(None, now_monotonic=10.0)
+        grace = controller.step(None, now_monotonic=10.49)
+        scan_right = controller.step(None, now_monotonic=10.5)
+        scan_left = controller.step(None, now_monotonic=11.6)
+        turn_away = controller.step(None, now_monotonic=14.6)
+        step_away = controller.step(None, now_monotonic=15.6)
+        next_scan = controller.step(None, now_monotonic=16.6)
+
+        self.assertEqual(just_lost.state, FollowState.LOST)
+        self.assertEqual(grace.state, FollowState.LOST)
+        self.assertEqual(scan_right.state, FollowState.SEARCH)
+        self.assertEqual(scan_right.look_horizontal, 0.3)
+        self.assertEqual(scan_right.vertical, 0.0)
+        self.assertEqual(scan_left.state, FollowState.SEARCH)
+        self.assertEqual(scan_left.look_horizontal, -0.3)
+        self.assertEqual(turn_away.state, FollowState.RELOCATE)
+        self.assertEqual(turn_away.look_horizontal, 0.3)
+        self.assertEqual(turn_away.vertical, 0.0)
+        self.assertEqual(step_away.state, FollowState.RELOCATE)
+        self.assertEqual(step_away.look_horizontal, 0.0)
+        self.assertEqual(step_away.vertical, 0.2)
+        self.assertEqual(next_scan.state, FollowState.SEARCH)
+        self.assertEqual(next_scan.look_horizontal, -0.3)
+
+    def test_reacquired_target_preempts_search_and_resets_loss_timer(self):
+        controller = FollowController(
+            FollowConfig(
+                smoothing_alpha=1.0,
+                search_delay_seconds=0.5,
+                search_sweep_seconds=4.0,
+                search_turn=0.3,
+                relocate_turn_seconds=1.0,
+                relocate_forward_seconds=1.0,
+                relocate_forward=0.2,
+            )
+        )
+
+        controller.step(None, now_monotonic=10.0)
+        searching = controller.step(None, now_monotonic=10.6)
+        reacquired = controller.step(
+            _received(center_x=0.5, height=0.2, received_at=10.7),
+            now_monotonic=10.7,
+        )
+        lost_again = controller.step(None, now_monotonic=10.8)
+        new_grace = controller.step(None, now_monotonic=11.2)
+
+        self.assertEqual(searching.state, FollowState.SEARCH)
+        self.assertEqual(reacquired.state, FollowState.FOLLOW)
+        self.assertEqual(lost_again.state, FollowState.LOST)
+        self.assertEqual(new_grace.state, FollowState.LOST)
+
+    def test_active_search_can_be_disabled_for_waiting_intent(self):
+        controller = FollowController(FollowConfig(active_search=False))
+
+        controller.step(None, now_monotonic=10.0)
+        decision = controller.step(None, now_monotonic=100.0)
+
+        self.assertEqual(decision.state, FollowState.LOST)
+        self.assertEqual(decision.vertical, 0.0)
+        self.assertEqual(decision.look_horizontal, 0.0)
+
     def test_off_center_target_turns_without_moving_forward(self):
         decision = self.controller.step(
             _received(center_x=0.25, height=0.2),

@@ -9,6 +9,8 @@ from .follow_receiver import ReceivedObservation
 
 class FollowState(str, Enum):
     LOST = "lost"
+    SEARCH = "search"
+    RELOCATE = "relocate"
     ALIGN = "align"
     FOLLOW = "follow"
     HOLD = "hold"
@@ -17,6 +19,13 @@ class FollowState(str, Enum):
 @dataclass(frozen=True)
 class FollowConfig:
     stale_after_seconds: float = 0.3
+    active_search: bool = True
+    search_delay_seconds: float = 0.75
+    search_sweep_seconds: float = 6.0
+    search_turn: float = 0.35
+    relocate_turn_seconds: float = 1.0
+    relocate_forward_seconds: float = 1.0
+    relocate_forward: float = 0.2
     align_enter_error: float = 0.2
     align_exit_error: float = 0.1
     resume_follow_below_height: float = 0.35
@@ -30,6 +39,16 @@ class FollowConfig:
     def __post_init__(self) -> None:
         if self.stale_after_seconds <= 0:
             raise ValueError("stale_after_seconds must be positive")
+        if self.search_delay_seconds < 0:
+            raise ValueError("search_delay_seconds must be non-negative")
+        if self.search_sweep_seconds <= 0:
+            raise ValueError("search_sweep_seconds must be positive")
+        if not 0 < self.search_turn <= 1:
+            raise ValueError("search_turn must be in (0, 1]")
+        if self.relocate_turn_seconds <= 0 or self.relocate_forward_seconds <= 0:
+            raise ValueError("relocation durations must be positive")
+        if not 0 < self.relocate_forward <= 1:
+            raise ValueError("relocate_forward must be in (0, 1]")
         if not 0 <= self.align_exit_error < self.align_enter_error <= 1:
             raise ValueError("alignment thresholds must satisfy 0 <= exit < enter <= 1")
         if not 0 < self.resume_follow_below_height < self.hold_above_height <= 1:
@@ -85,6 +104,8 @@ class FollowController:
         self._last_observation_key: tuple[str, int] | None = None
         self._smoothed_center_error: float | None = None
         self._smoothed_height: float | None = None
+        self._lost_since_monotonic: float | None = None
+        self._search_direction = 1.0
 
     @property
     def state(self) -> FollowState:
@@ -97,19 +118,28 @@ class FollowController:
         now_monotonic: float,
     ) -> FollowDecision:
         if received is None:
-            return self._lose_target()
+            return self._lose_target(now_monotonic=now_monotonic)
 
         age = max(0.0, float(now_monotonic) - received.received_monotonic)
         observation = received.observation
         if age > self.config.stale_after_seconds or not observation.visible:
-            return self._lose_target(observation_age_seconds=age)
+            return self._lose_target(
+                now_monotonic=now_monotonic,
+                observation_age_seconds=age,
+            )
 
         center_x = observation.center_x
         height = observation.height
         if center_x is None or height is None:
-            return self._lose_target(observation_age_seconds=age)
+            return self._lose_target(
+                now_monotonic=now_monotonic,
+                observation_age_seconds=age,
+            )
 
         center_error = 2.0 * (center_x - 0.5)
+        self._lost_since_monotonic = None
+        if center_error != 0.0:
+            self._search_direction = math.copysign(1.0, center_error)
         key = (observation.session_id, observation.sequence)
         if key != self._last_observation_key:
             alpha = self.config.smoothing_alpha
@@ -183,14 +213,75 @@ class FollowController:
             target_height=height,
         )
 
-    def _lose_target(self, *, observation_age_seconds: float | None = None) -> FollowDecision:
-        self._state = FollowState.LOST
+    def _lose_target(
+        self,
+        *,
+        now_monotonic: float,
+        observation_age_seconds: float | None = None,
+    ) -> FollowDecision:
+        now = float(now_monotonic)
+        if self._lost_since_monotonic is None:
+            self._lost_since_monotonic = now
         self._last_observation_key = None
         self._smoothed_center_error = None
         self._smoothed_height = None
-        return FollowDecision.neutral(
-            FollowState.LOST,
+
+        elapsed = max(0.0, now - self._lost_since_monotonic)
+        if not self.config.active_search or elapsed < self.config.search_delay_seconds:
+            self._state = FollowState.LOST
+            return FollowDecision.neutral(
+                self._state,
+                observation_age_seconds=observation_age_seconds,
+            )
+
+        active_elapsed = elapsed - self.config.search_delay_seconds
+        cycle_seconds = (
+            self.config.search_sweep_seconds
+            + self.config.relocate_turn_seconds
+            + self.config.relocate_forward_seconds
+        )
+        cycle_index = int(active_elapsed // cycle_seconds)
+        phase = active_elapsed % cycle_seconds
+        direction = self._search_direction * (1.0 if cycle_index % 2 == 0 else -1.0)
+
+        if phase < self.config.search_sweep_seconds:
+            # Sweep to one side, across the starting heading, then back. This scans
+            # the full view without letting one search cycle accumulate body yaw.
+            sweep_progress = phase / self.config.search_sweep_seconds
+            sweep_direction = -direction if 0.25 <= sweep_progress < 0.75 else direction
+            self._state = FollowState.SEARCH
+            return FollowDecision(
+                state=self._state,
+                horizontal=0.0,
+                vertical=0.0,
+                look_horizontal=sweep_direction * self.config.search_turn,
+                observation_age_seconds=observation_age_seconds,
+                target_center_error=None,
+                target_height=None,
+            )
+
+        relocation_phase = phase - self.config.search_sweep_seconds
+        self._state = FollowState.RELOCATE
+        if relocation_phase < self.config.relocate_turn_seconds:
+            # Perception has no depth signal yet. Turn before moving so a failed
+            # search does not blindly drive straight into the occluder ahead.
+            return FollowDecision(
+                state=self._state,
+                horizontal=0.0,
+                vertical=0.0,
+                look_horizontal=direction * self.config.search_turn,
+                observation_age_seconds=observation_age_seconds,
+                target_center_error=None,
+                target_height=None,
+            )
+        return FollowDecision(
+            state=self._state,
+            horizontal=0.0,
+            vertical=self.config.relocate_forward,
+            look_horizontal=0.0,
             observation_age_seconds=observation_age_seconds,
+            target_center_error=None,
+            target_height=None,
         )
 
 

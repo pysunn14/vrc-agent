@@ -45,7 +45,7 @@ class FollowPromptRouter:
     def __call__(self, _old_state: FollowState, new_state: FollowState) -> None:
         desired = (
             self.walking_prompt
-            if new_state in (FollowState.ALIGN, FollowState.FOLLOW)
+            if new_state in (FollowState.RELOCATE, FollowState.ALIGN, FollowState.FOLLOW)
             else self.idle_prompt
         )
         with self._lock:

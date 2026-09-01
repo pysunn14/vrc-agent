@@ -81,6 +81,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--follow-port", type=int, default=9200)
     parser.add_argument("--follow-tick-hz", type=float, default=20.0)
     parser.add_argument("--follow-stale-seconds", type=float, default=0.3)
+    parser.add_argument(
+        "--follow-active-search",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Actively scan and relocate after losing the target",
+    )
+    parser.add_argument("--follow-search-delay", type=float, default=0.75)
+    parser.add_argument("--follow-search-sweep-seconds", type=float, default=6.0)
+    parser.add_argument("--follow-search-turn", type=float, default=0.35)
+    parser.add_argument("--follow-relocate-turn-seconds", type=float, default=1.0)
+    parser.add_argument("--follow-relocate-forward-seconds", type=float, default=1.0)
+    parser.add_argument("--follow-relocate-forward", type=float, default=0.2)
     parser.add_argument("--follow-align-enter", type=float, default=0.2)
     parser.add_argument("--follow-align-exit", type=float, default=0.1)
     parser.add_argument("--follow-resume-height", type=float, default=0.35)
@@ -281,6 +293,13 @@ def main() -> None:
             controller=FollowController(
                 FollowConfig(
                     stale_after_seconds=args.follow_stale_seconds,
+                    active_search=args.follow_active_search,
+                    search_delay_seconds=args.follow_search_delay,
+                    search_sweep_seconds=args.follow_search_sweep_seconds,
+                    search_turn=args.follow_search_turn,
+                    relocate_turn_seconds=args.follow_relocate_turn_seconds,
+                    relocate_forward_seconds=args.follow_relocate_forward_seconds,
+                    relocate_forward=args.follow_relocate_forward,
                     align_enter_error=args.follow_align_enter,
                     align_exit_error=args.follow_align_exit,
                     resume_follow_below_height=args.follow_resume_height,
