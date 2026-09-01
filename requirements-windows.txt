@@ -1,5 +1,6 @@
 # Windows-side capture and person tracking for the follower PoC.
 windows-capture==2.0.1
 ultralytics==8.4.137
+easyocr==1.7.2
 scipy==1.17.1
 lap==0.5.13

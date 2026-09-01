@@ -4,7 +4,11 @@ import socket
 import time
 import unittest
 
-from vrc_ardy_agent.follow_protocol import TargetObservation, encode_target_observation
+from vrc_ardy_agent.follow_protocol import (
+    TargetObservation,
+    TargetSource,
+    encode_target_observation,
+)
 from vrc_ardy_agent.follow_receiver import LatestObservationStore, UdpObservationReceiver
 
 
@@ -14,7 +18,9 @@ def _observation(*, session: str = "a", sequence: int = 1) -> TargetObservation:
         sequence=sequence,
         captured_at_ns=sequence,
         visible=True,
-        bbox=(0.2, 0.1, 0.6, 0.9),
+        source=TargetSource.BODY,
+        center_x=0.4,
+        proximity=0.8,
         confidence=0.9,
     )
 

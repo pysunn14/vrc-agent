@@ -4,7 +4,7 @@ import time
 import unittest
 
 from vrc_ardy_agent.follow_control import FollowConfig, FollowController, FollowState
-from vrc_ardy_agent.follow_protocol import TargetObservation
+from vrc_ardy_agent.follow_protocol import TargetObservation, TargetSource
 from vrc_ardy_agent.follow_receiver import UdpObservationReceiver
 from vrc_ardy_agent.follow_runtime import FollowDecisionLoop, LatestDecisionStore
 from vrc_ardy_agent.windows_perception import UdpObservationSender
@@ -30,7 +30,9 @@ class FollowUdpIntegrationTests(unittest.TestCase):
                     sequence=0,
                     captured_at_ns=time.perf_counter_ns(),
                     visible=True,
-                    bbox=(0.4, 0.1, 0.6, 0.3),
+                    source=TargetSource.BODY,
+                    center_x=0.5,
+                    proximity=0.2,
                     confidence=0.9,
                 )
             )

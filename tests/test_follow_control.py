@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from vrc_ardy_agent.follow_control import FollowConfig, FollowController, FollowState
-from vrc_ardy_agent.follow_protocol import TargetObservation
+from vrc_ardy_agent.follow_protocol import TargetObservation, TargetSource
 from vrc_ardy_agent.follow_receiver import ReceivedObservation
 
 
@@ -16,19 +16,24 @@ def _received(
     received_at: float = 10.0,
 ) -> ReceivedObservation:
     if visible:
-        half_width = 0.1
-        bbox = (center_x - half_width, 0.1, center_x + half_width, 0.1 + height)
         confidence = 0.9
+        source = TargetSource.BODY
+        observed_center_x = center_x
+        proximity = height
     else:
-        bbox = None
         confidence = 0.0
+        source = None
+        observed_center_x = None
+        proximity = None
     return ReceivedObservation(
         observation=TargetObservation(
             session_id="session-a",
             sequence=sequence,
             captured_at_ns=sequence,
             visible=visible,
-            bbox=bbox,
+            source=source,
+            center_x=observed_center_x,
+            proximity=proximity,
             confidence=confidence,
         ),
         received_monotonic=received_at,

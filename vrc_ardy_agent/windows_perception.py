@@ -5,10 +5,12 @@ import math
 import socket
 import threading
 import time
-from typing import Any, Callable, Iterable, Protocol
+from typing import Any, Callable, Protocol
 from uuid import uuid4
 
-from .follow_protocol import TargetObservation, encode_target_observation
+from .follow_protocol import TargetObservation, TargetSource, encode_target_observation
+from .nameplate import AsyncNameplateTracker
+from .target_fusion import TargetFusionSelector, TargetMeasurement
 
 
 class CaptureSource(Protocol):
@@ -60,44 +62,6 @@ class TrackedDetection:
         return (x2 - x1) * (y2 - y1)
 
 
-class SingleTargetSelector:
-    """Lock the first large person track and avoid jumping on brief tracking loss."""
-
-    def __init__(self, *, reacquire_after_missed_frames: int = 6) -> None:
-        if isinstance(reacquire_after_missed_frames, bool) or reacquire_after_missed_frames < 1:
-            raise ValueError("reacquire_after_missed_frames must be a positive integer")
-        self.reacquire_after_missed_frames = int(reacquire_after_missed_frames)
-        self._target_track_id: int | None = None
-        self._missed_frames = 0
-
-    @property
-    def target_track_id(self) -> int | None:
-        return self._target_track_id
-
-    def reset(self) -> None:
-        self._target_track_id = None
-        self._missed_frames = 0
-
-    def select(self, detections: Iterable[TrackedDetection]) -> TrackedDetection | None:
-        candidates = list(detections)
-        if self._target_track_id is not None:
-            for detection in candidates:
-                if detection.track_id == self._target_track_id:
-                    self._missed_frames = 0
-                    return detection
-            self._missed_frames += 1
-            if self._missed_frames < self.reacquire_after_missed_frames:
-                return None
-            self.reset()
-
-        if not candidates:
-            return None
-        selected = max(candidates, key=lambda detection: detection.area)
-        self._target_track_id = selected.track_id
-        self._missed_frames = 0
-        return selected
-
-
 class UdpObservationSender:
     def __init__(self, *, host: str, port: int = 9200) -> None:
         if not host:
@@ -126,7 +90,14 @@ class PerceptionStatus:
     frames_processed: int = 0
     observations_sent: int = 0
     target_visible: bool = False
+    target_source: TargetSource | None = None
     last_inference_seconds: float | None = None
+    nameplate_running: bool = False
+    nameplate_scanning: bool = False
+    nameplate_scans_completed: int = 0
+    nameplate_matches_found: int = 0
+    last_nameplate_scan_seconds: float | None = None
+    nameplate_error: str | None = None
     last_error: str | None = None
     heartbeat_monotonic: float = 0.0
 
@@ -139,14 +110,16 @@ class WindowsPerceptionRunner:
         *,
         capture: CaptureSource,
         tracker: PersonTracker,
-        selector: SingleTargetSelector,
+        selector: TargetFusionSelector,
         sender: ObservationSender,
+        nameplate_tracker: AsyncNameplateTracker | None = None,
         session_id: str | None = None,
     ) -> None:
         self.capture = capture
         self.tracker = tracker
         self.selector = selector
         self.sender = sender
+        self.nameplate_tracker = nameplate_tracker
         self.session_id = session_id or str(uuid4())
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
@@ -184,6 +157,8 @@ class WindowsPerceptionRunner:
 
         try:
             self.capture.start()
+            if self.nameplate_tracker is not None:
+                self.nameplate_tracker.start()
             while not self._stop_event.is_set():
                 if max_frames is not None and sequence >= max_frames:
                     break
@@ -194,6 +169,7 @@ class WindowsPerceptionRunner:
                 try:
                     frame = self.capture.read(timeout_seconds=0.5)
                 except TimeoutError:
+                    self._sync_nameplate_status()
                     next_heartbeat = self._emit_heartbeat_if_due(
                         now=time.monotonic(),
                         next_heartbeat=next_heartbeat,
@@ -202,13 +178,28 @@ class WindowsPerceptionRunner:
                     )
                     continue
 
+                frame_observed = time.monotonic()
+                if self.nameplate_tracker is not None:
+                    self.nameplate_tracker.submit(
+                        frame,
+                        observed_monotonic=frame_observed,
+                    )
                 inference_started = time.monotonic()
                 detections = self.tracker.track(frame)
                 inference_seconds = time.monotonic() - inference_started
-                selected = self.selector.select(detections)
+                now = time.monotonic()
+                nameplate = (
+                    self.nameplate_tracker.snapshot(now_monotonic=now)
+                    if self.nameplate_tracker is not None
+                    else None
+                )
+                selected = self.selector.select(
+                    detections,
+                    nameplate=nameplate,
+                    frame_shape=frame.shape,
+                )
                 observation = self._make_observation(
-                    frame=frame,
-                    detection=selected,
+                    measurement=selected,
                     sequence=sequence,
                 )
                 self.sender.send(observation)
@@ -220,9 +211,11 @@ class WindowsPerceptionRunner:
                         frames_processed=sequence,
                         observations_sent=self._status.observations_sent + 1,
                         target_visible=observation.visible,
+                        target_source=observation.source,
                         last_inference_seconds=inference_seconds,
                         heartbeat_monotonic=now,
                     )
+                self._sync_nameplate_status()
                 next_heartbeat = self._emit_heartbeat_if_due(
                     now=now,
                     next_heartbeat=next_heartbeat,
@@ -235,9 +228,13 @@ class WindowsPerceptionRunner:
             raise
         finally:
             try:
-                self.capture.close()
+                if self.nameplate_tracker is not None:
+                    self.nameplate_tracker.stop()
             finally:
-                self.sender.close()
+                try:
+                    self.capture.close()
+                finally:
+                    self.sender.close()
             with self._lock:
                 self._status = replace(
                     self._status,
@@ -262,45 +259,48 @@ class WindowsPerceptionRunner:
             callback(self.status)
         return now + interval
 
+    def _sync_nameplate_status(self) -> None:
+        tracker = self.nameplate_tracker
+        if tracker is None:
+            return
+        status = tracker.status
+        with self._lock:
+            self._status = replace(
+                self._status,
+                nameplate_running=status.running,
+                nameplate_scanning=status.scanning,
+                nameplate_scans_completed=status.scans_completed,
+                nameplate_matches_found=status.matches_found,
+                last_nameplate_scan_seconds=status.last_scan_seconds,
+                nameplate_error=status.last_error,
+            )
+
     def _make_observation(
         self,
         *,
-        frame: Any,
-        detection: TrackedDetection | None,
+        measurement: TargetMeasurement | None,
         sequence: int,
     ) -> TargetObservation:
-        try:
-            height, width = int(frame.shape[0]), int(frame.shape[1])
-        except (AttributeError, IndexError, TypeError, ValueError) as exc:
-            raise ValueError("captured frame must expose a valid image shape") from exc
-        if width <= 0 or height <= 0:
-            raise ValueError("captured frame dimensions must be positive")
-        if detection is None:
+        if measurement is None:
             return TargetObservation(
                 session_id=self.session_id,
                 sequence=sequence,
                 captured_at_ns=time.perf_counter_ns(),
                 visible=False,
-                bbox=None,
+                source=None,
+                center_x=None,
+                proximity=None,
                 confidence=0.0,
             )
-
-        x1, y1, x2, y2 = detection.bbox_xyxy
-        normalized = (
-            max(0.0, min(1.0, x1 / width)),
-            max(0.0, min(1.0, y1 / height)),
-            max(0.0, min(1.0, x2 / width)),
-            max(0.0, min(1.0, y2 / height)),
-        )
-        if normalized[0] >= normalized[2] or normalized[1] >= normalized[3]:
-            raise ValueError("detected bbox is outside the captured frame")
         return TargetObservation(
             session_id=self.session_id,
             sequence=sequence,
             captured_at_ns=time.perf_counter_ns(),
             visible=True,
-            bbox=normalized,
-            confidence=detection.confidence,
+            source=measurement.source,
+            center_x=measurement.center_x,
+            proximity=measurement.proximity,
+            confidence=measurement.confidence,
         )
 
 

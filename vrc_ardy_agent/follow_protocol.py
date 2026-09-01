@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 import json
 import math
 from typing import Any
 
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 MAX_PACKET_BYTES = 4096
 
 
 class FollowProtocolError(ValueError):
     pass
+
+
+class TargetSource(str, Enum):
+    BODY = "body"
+    NAMEPLATE = "nameplate"
+    FUSED = "fused"
 
 
 def _require_plain_int(value: Any, field: str) -> int:
@@ -37,7 +44,9 @@ class TargetObservation:
     sequence: int
     captured_at_ns: int
     visible: bool
-    bbox: tuple[float, float, float, float] | None
+    source: TargetSource | None
+    center_x: float | None
+    proximity: float | None
     confidence: float
 
     def __post_init__(self) -> None:
@@ -60,33 +69,25 @@ class TargetObservation:
         object.__setattr__(self, "confidence", confidence)
 
         if not self.visible:
-            if self.bbox is not None:
-                raise FollowProtocolError("an invisible observation must not contain a bbox")
+            if self.source is not None or self.center_x is not None or self.proximity is not None:
+                raise FollowProtocolError("an invisible observation must not contain target geometry")
             if confidence != 0.0:
                 raise FollowProtocolError("an invisible observation must have zero confidence")
             return
 
-        if self.bbox is None or len(self.bbox) != 4:
-            raise FollowProtocolError("a visible observation requires a four-value bbox")
-        x1, y1, x2, y2 = (
-            _require_number(value, f"bbox[{index}]")
-            for index, value in enumerate(self.bbox)
-        )
-        if not (0.0 <= x1 < x2 <= 1.0 and 0.0 <= y1 < y2 <= 1.0):
-            raise FollowProtocolError("bbox must be ordered and normalized to [0, 1]")
-        object.__setattr__(self, "bbox", (x1, y1, x2, y2))
-
-    @property
-    def center_x(self) -> float | None:
-        if self.bbox is None:
-            return None
-        return (self.bbox[0] + self.bbox[2]) * 0.5
-
-    @property
-    def height(self) -> float | None:
-        if self.bbox is None:
-            return None
-        return self.bbox[3] - self.bbox[1]
+        try:
+            source = self.source if isinstance(self.source, TargetSource) else TargetSource(self.source)
+        except (TypeError, ValueError) as exc:
+            raise FollowProtocolError("a visible observation requires a valid source") from exc
+        center_x = _require_number(self.center_x, "center_x")
+        proximity = _require_number(self.proximity, "proximity")
+        if not 0.0 <= center_x <= 1.0:
+            raise FollowProtocolError("center_x must be in [0, 1]")
+        if not 0.0 <= proximity <= 1.0:
+            raise FollowProtocolError("proximity must be in [0, 1]")
+        object.__setattr__(self, "source", source)
+        object.__setattr__(self, "center_x", center_x)
+        object.__setattr__(self, "proximity", proximity)
 
 
 def encode_target_observation(observation: TargetObservation) -> bytes:
@@ -96,7 +97,9 @@ def encode_target_observation(observation: TargetObservation) -> bytes:
         "seq": observation.sequence,
         "captured_at_ns": observation.captured_at_ns,
         "visible": observation.visible,
-        "bbox": list(observation.bbox) if observation.bbox is not None else None,
+        "source": observation.source.value if observation.source is not None else None,
+        "center_x": observation.center_x,
+        "proximity": observation.proximity,
         "confidence": observation.confidence,
     }
     packet = json.dumps(payload, separators=(",", ":"), ensure_ascii=True).encode("utf-8")
@@ -123,20 +126,15 @@ def decode_target_observation(packet: bytes) -> TargetObservation:
         "seq",
         "captured_at_ns",
         "visible",
-        "bbox",
+        "source",
+        "center_x",
+        "proximity",
         "confidence",
     }
     if set(payload) != expected_keys:
-        raise FollowProtocolError("packet fields do not match protocol version 1")
+        raise FollowProtocolError("packet fields do not match protocol version 2")
     if _require_plain_int(payload["version"], "version") != PROTOCOL_VERSION:
         raise FollowProtocolError(f"unsupported protocol version: {payload['version']!r}")
-
-    raw_bbox = payload["bbox"]
-    bbox = None
-    if raw_bbox is not None:
-        if not isinstance(raw_bbox, list) or len(raw_bbox) != 4:
-            raise FollowProtocolError("bbox must be null or a four-value array")
-        bbox = tuple(raw_bbox)
 
     try:
         return TargetObservation(
@@ -144,10 +142,12 @@ def decode_target_observation(packet: bytes) -> TargetObservation:
             sequence=_require_plain_int(payload["seq"], "seq"),
             captured_at_ns=_require_plain_int(payload["captured_at_ns"], "captured_at_ns"),
             visible=payload["visible"],
-            bbox=bbox,  # type: ignore[arg-type]
+            source=payload["source"],
+            center_x=payload["center_x"],
+            proximity=payload["proximity"],
             confidence=_require_number(payload["confidence"], "confidence"),
         )
-    except (TypeError, FollowProtocolError) as exc:
+    except (TypeError, ValueError, FollowProtocolError) as exc:
         if isinstance(exc, FollowProtocolError):
             raise
         raise FollowProtocolError("packet contains invalid field types") from exc

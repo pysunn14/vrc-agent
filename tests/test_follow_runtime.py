@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from vrc_ardy_agent.follow_control import FollowConfig, FollowController, FollowState
-from vrc_ardy_agent.follow_protocol import TargetObservation
+from vrc_ardy_agent.follow_protocol import TargetObservation, TargetSource
 from vrc_ardy_agent.follow_receiver import LatestObservationStore
 from vrc_ardy_agent.follow_runtime import (
     FollowDecisionLoop,
@@ -34,7 +34,9 @@ class FollowDecisionLoopTests(unittest.TestCase):
                 sequence=1,
                 captured_at_ns=1,
                 visible=True,
-                bbox=(0.4, 0.1, 0.6, 0.3),
+                source=TargetSource.BODY,
+                center_x=0.5,
+                proximity=0.2,
                 confidence=0.9,
             ),
             received_monotonic=10.0,

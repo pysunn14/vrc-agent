@@ -14,6 +14,22 @@ class WindowsPerceptionCliTests(unittest.TestCase):
         self.assertIsNone(args.hwnd)
         self.assertEqual(args.window_title, "VRChat")
 
+    def test_run_accepts_nameplate_target_configuration(self):
+        args = build_parser().parse_args(
+            [
+                "run",
+                "--hwnd",
+                "123",
+                "--mac-host",
+                "127.0.0.1",
+                "--target-name",
+                "TargetUser 28",
+            ]
+        )
+
+        self.assertEqual(args.target_name, "TargetUser 28")
+        self.assertEqual(args.nameplate_scan_interval, 0.5)
+
     def test_run_requires_exactly_one_window_selector(self):
         parser = build_parser()
 

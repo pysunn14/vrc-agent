@@ -14,11 +14,16 @@ from vrc_ardy_agent.windows_capture import (
 )
 from vrc_ardy_agent.windows_perception import (
     PerceptionStatus,
-    SingleTargetSelector,
     UdpObservationSender,
     UltralyticsPersonTracker,
     WindowsPerceptionRunner,
 )
+from vrc_ardy_agent.nameplate import (
+    AsyncNameplateTracker,
+    EasyOcrTextReader,
+    NameplateMatcher,
+)
+from vrc_ardy_agent.target_fusion import TargetFusionSelector
 
 
 def parse_hwnd(value: str) -> int:
@@ -57,9 +62,23 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--device", default=None, help="Ultralytics device, such as cpu or 0")
     run_parser.add_argument("--capture-interval-ms", type=int, default=50)
     run_parser.add_argument("--reacquire-frames", type=int, default=6)
+    _add_nameplate_arguments(run_parser)
     run_parser.add_argument("--duration", type=float, default=None)
     run_parser.add_argument("--max-frames", type=int, default=None)
     return parser
+
+
+def _add_nameplate_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--target-name",
+        help="Exact VRChat display name; omit to use body tracking only",
+    )
+    parser.add_argument("--nameplate-scan-interval", type=float, default=0.5)
+    parser.add_argument("--nameplate-max-age", type=float, default=2.0)
+    parser.add_argument("--nameplate-match-threshold", type=float, default=0.72)
+    parser.add_argument("--nameplate-input-width", type=int, default=960)
+    parser.add_argument("--nameplate-model-dir")
+    parser.add_argument("--nameplate-hold-width-ratio", type=float, default=0.16)
 
 
 def print_heartbeat(status: PerceptionStatus) -> None:
@@ -73,7 +92,12 @@ def print_heartbeat(status: PerceptionStatus) -> None:
         f"frames={status.frames_processed} "
         f"sent={status.observations_sent} "
         f"visible={status.target_visible} "
+        f"source={status.target_source.value if status.target_source else '-'} "
         f"inference={inference} "
+        f"ocr={'scanning' if status.nameplate_scanning else 'idle'} "
+        f"ocr_scans={status.nameplate_scans_completed} "
+        f"ocr_matches={status.nameplate_matches_found} "
+        f"ocr_error={status.nameplate_error or '-'} "
         f"error={status.last_error or '-'}",
         flush=True,
     )
@@ -123,17 +147,35 @@ def main() -> None:
         image_size=args.image_size,
         device=args.device,
     )
+    nameplate_tracker = None
+    if args.target_name:
+        nameplate_tracker = AsyncNameplateTracker(
+            reader=EasyOcrTextReader(
+                input_width=args.nameplate_input_width,
+                model_storage_directory=args.nameplate_model_dir,
+            ),
+            matcher=NameplateMatcher(
+                args.target_name,
+                minimum_score=args.nameplate_match_threshold,
+            ),
+            scan_interval_seconds=args.nameplate_scan_interval,
+            max_result_age_seconds=args.nameplate_max_age,
+        )
+
     runner = WindowsPerceptionRunner(
         capture=capture,
         tracker=tracker,
-        selector=SingleTargetSelector(
+        selector=TargetFusionSelector(
             reacquire_after_missed_frames=args.reacquire_frames,
+            desired_nameplate_width_ratio=args.nameplate_hold_width_ratio,
         ),
         sender=UdpObservationSender(host=args.mac_host, port=args.port),
+        nameplate_tracker=nameplate_tracker,
     )
     print(
         f"tracking hwnd=0x{hwnd:X}; target={args.mac_host}:{args.port}; "
-        f"model={args.model}; tracker={args.tracker}",
+        f"model={args.model}; tracker={args.tracker}; "
+        f"nameplate={'enabled' if nameplate_tracker is not None else 'disabled'}",
         flush=True,
     )
     try:

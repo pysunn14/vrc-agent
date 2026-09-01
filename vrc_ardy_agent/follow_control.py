@@ -129,8 +129,8 @@ class FollowController:
             )
 
         center_x = observation.center_x
-        height = observation.height
-        if center_x is None or height is None:
+        proximity = observation.proximity
+        if center_x is None or proximity is None:
             return self._lose_target(
                 now_monotonic=now_monotonic,
                 observation_age_seconds=age,
@@ -145,13 +145,15 @@ class FollowController:
             alpha = self.config.smoothing_alpha
             if self._smoothed_center_error is None:
                 self._smoothed_center_error = center_error
-                self._smoothed_height = height
+                self._smoothed_height = proximity
             else:
                 self._smoothed_center_error = (
                     alpha * center_error + (1.0 - alpha) * self._smoothed_center_error
                 )
                 assert self._smoothed_height is not None
-                self._smoothed_height = alpha * height + (1.0 - alpha) * self._smoothed_height
+                self._smoothed_height = (
+                    alpha * proximity + (1.0 - alpha) * self._smoothed_height
+                )
             self._last_observation_key = key
 
         assert self._smoothed_center_error is not None
