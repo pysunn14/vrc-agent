@@ -1,0 +1,3 @@
+# Windows-side capture and person tracking for the follower PoC.
+windows-capture==2.0.1
+ultralytics==8.4.137

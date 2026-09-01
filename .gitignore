@@ -1,0 +1,5 @@
+_local/docs/
+__pycache__/
+*.py[cod]
+.venv/
+yolov8*.pt
