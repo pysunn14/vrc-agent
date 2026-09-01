@@ -4,7 +4,8 @@ from dataclasses import dataclass
 import queue
 import sys
 import threading
-from typing import Any
+import time
+from typing import Any, Callable, Iterable
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,72 @@ class WindowInfo:
     width: int
     height: int
     minimized: bool
+
+
+def choose_window(windows: Iterable[WindowInfo], *, title: str) -> WindowInfo | None:
+    normalized_title = title.strip().casefold()
+    if not normalized_title:
+        raise ValueError("title must not be empty")
+    candidates = [
+        window for window in windows if normalized_title in window.title.casefold()
+    ]
+    if not candidates:
+        return None
+    return max(
+        candidates,
+        key=lambda window: (
+            not window.minimized,
+            window.title.casefold() == normalized_title,
+            window.width * window.height,
+            -window.hwnd,
+        ),
+    )
+
+
+def wait_for_window(
+    *,
+    title: str,
+    timeout_seconds: float | None = None,
+    poll_interval_seconds: float = 0.5,
+    heartbeat_interval_seconds: float = 2.0,
+    heartbeat: Callable[[float], None] | None = None,
+    enumerate_windows: Callable[..., list[WindowInfo]] | None = None,
+    monotonic: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> WindowInfo:
+    if timeout_seconds is not None and timeout_seconds <= 0:
+        raise ValueError("timeout_seconds must be positive")
+    if poll_interval_seconds <= 0:
+        raise ValueError("poll_interval_seconds must be positive")
+    if heartbeat_interval_seconds <= 0:
+        raise ValueError("heartbeat_interval_seconds must be positive")
+    normalized_title = title.strip()
+    if not normalized_title:
+        raise ValueError("title must not be empty")
+
+    enumerate_now = enumerate_windows or list_windows
+    started_at = monotonic()
+    next_heartbeat = started_at + heartbeat_interval_seconds
+    while True:
+        selected = choose_window(
+            enumerate_now(title_filter=normalized_title),
+            title=normalized_title,
+        )
+        if selected is not None:
+            return selected
+
+        now = monotonic()
+        elapsed = now - started_at
+        if timeout_seconds is not None and elapsed >= timeout_seconds:
+            raise TimeoutError(
+                f"window matching {normalized_title!r} did not appear within "
+                f"{timeout_seconds:.1f} seconds"
+            )
+        if now >= next_heartbeat:
+            if heartbeat is not None:
+                heartbeat(elapsed)
+            next_heartbeat = now + heartbeat_interval_seconds
+        sleep(poll_interval_seconds)
 
 
 class LatestFrameQueue:

@@ -13,7 +13,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from vrc_ardy_agent.follow_protocol import TargetObservation
 from vrc_ardy_agent.follow_receiver import UdpObservationReceiver
-from vrc_ardy_agent.windows_capture import WindowsGraphicsCaptureSource, list_windows
+from vrc_ardy_agent.windows_capture import (
+    WindowsGraphicsCaptureSource,
+    list_windows,
+    wait_for_window,
+)
 from vrc_ardy_agent.windows_perception import (
     SingleTargetSelector,
     UdpObservationSender,
@@ -92,7 +96,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _add_tracking_arguments(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--hwnd", type=_parse_hwnd, required=True)
+    window_selector = parser.add_mutually_exclusive_group(required=True)
+    window_selector.add_argument("--hwnd", type=_parse_hwnd)
+    window_selector.add_argument("--window-title")
+    parser.add_argument("--window-wait-timeout", type=float, default=None)
     parser.add_argument("--mac-host", required=True)
     parser.add_argument("--port", type=int, default=9200)
     parser.add_argument("--model", default="yolov8n.pt")
@@ -145,9 +152,25 @@ def _windows_screenshot(args: argparse.Namespace) -> None:
 
 
 def _windows_track(args: argparse.Namespace) -> None:
+    hwnd = args.hwnd
+    if hwnd is None:
+        window = wait_for_window(
+            title=args.window_title,
+            timeout_seconds=args.window_wait_timeout,
+            heartbeat=lambda elapsed: _print_json(
+                {
+                    "event": "window_wait_heartbeat",
+                    "title": args.window_title,
+                    "elapsed_seconds": elapsed,
+                }
+            ),
+        )
+        hwnd = window.hwnd
+        _print_json({"event": "window_found", **asdict(window)})
+
     runner = WindowsPerceptionRunner(
         capture=WindowsGraphicsCaptureSource(
-            hwnd=args.hwnd,
+            hwnd=hwnd,
             minimum_update_interval_ms=args.capture_interval_ms,
         ),
         tracker=UltralyticsPersonTracker(

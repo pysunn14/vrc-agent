@@ -7,7 +7,11 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from vrc_ardy_agent.windows_capture import WindowsGraphicsCaptureSource, list_windows
+from vrc_ardy_agent.windows_capture import (
+    WindowsGraphicsCaptureSource,
+    list_windows,
+    wait_for_window,
+)
 from vrc_ardy_agent.windows_perception import (
     PerceptionStatus,
     SingleTargetSelector,
@@ -37,7 +41,13 @@ def build_parser() -> argparse.ArgumentParser:
     list_parser.add_argument("--title", help="Case-insensitive title substring filter")
 
     run_parser = subparsers.add_parser("run", help="Run window capture and person tracking")
-    run_parser.add_argument("--hwnd", required=True, type=parse_hwnd)
+    window_selector = run_parser.add_mutually_exclusive_group(required=True)
+    window_selector.add_argument("--hwnd", type=parse_hwnd)
+    window_selector.add_argument(
+        "--window-title",
+        help="Case-insensitive title substring; waits until a matching window appears",
+    )
+    run_parser.add_argument("--window-wait-timeout", type=float, default=None)
     run_parser.add_argument("--mac-host", required=True, help="Mac LAN or Tailscale address")
     run_parser.add_argument("--port", type=int, default=9200)
     run_parser.add_argument("--model", default="yolov8n.pt")
@@ -84,8 +94,26 @@ def main() -> None:
             )
         return
 
+    hwnd = args.hwnd
+    if hwnd is None:
+        print(f"waiting for window title={args.window_title!r}", flush=True)
+        window = wait_for_window(
+            title=args.window_title,
+            timeout_seconds=args.window_wait_timeout,
+            heartbeat=lambda elapsed: print(
+                f"heartbeat: waiting_for_window={args.window_title!r} elapsed={elapsed:.1f}s",
+                flush=True,
+            ),
+        )
+        hwnd = window.hwnd
+        print(
+            f"window found: hwnd=0x{hwnd:X} pid={window.process_id} "
+            f"size={window.width}x{window.height} title={window.title}",
+            flush=True,
+        )
+
     capture = WindowsGraphicsCaptureSource(
-        hwnd=args.hwnd,
+        hwnd=hwnd,
         minimum_update_interval_ms=args.capture_interval_ms,
     )
     tracker = UltralyticsPersonTracker(
@@ -104,7 +132,7 @@ def main() -> None:
         sender=UdpObservationSender(host=args.mac_host, port=args.port),
     )
     print(
-        f"tracking hwnd=0x{args.hwnd:X}; target={args.mac_host}:{args.port}; "
+        f"tracking hwnd=0x{hwnd:X}; target={args.mac_host}:{args.port}; "
         f"model={args.model}; tracker={args.tracker}",
         flush=True,
     )

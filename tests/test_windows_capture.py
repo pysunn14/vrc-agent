@@ -4,7 +4,77 @@ import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
 
-from vrc_ardy_agent.windows_capture import LatestFrameQueue, WindowsGraphicsCaptureSource
+from vrc_ardy_agent.windows_capture import (
+    LatestFrameQueue,
+    WindowInfo,
+    WindowsGraphicsCaptureSource,
+    choose_window,
+    wait_for_window,
+)
+
+
+class WindowSelectionTests(unittest.TestCase):
+    def test_choose_window_prefers_visible_exact_title_then_largest_area(self):
+        windows = [
+            WindowInfo(1, "VRChat", 10, 1920, 1080, True),
+            WindowInfo(2, "VRChat overlay", 11, 2560, 1440, False),
+            WindowInfo(3, "VRChat", 12, 1280, 720, False),
+            WindowInfo(4, "VRChat", 13, 1600, 900, False),
+        ]
+
+        selected = choose_window(windows, title="VRChat")
+
+        self.assertEqual(selected, windows[3])
+
+    def test_wait_for_window_retries_and_reports_heartbeat(self):
+        target = WindowInfo(7, "VRChat", 20, 1920, 1080, False)
+        responses = iter([[], [], [target]])
+        now = 0.0
+        heartbeats: list[float] = []
+
+        def enumerate_windows(*, title_filter: str | None = None):
+            self.assertEqual(title_filter, "VRChat")
+            return next(responses)
+
+        def monotonic() -> float:
+            return now
+
+        def sleep(seconds: float) -> None:
+            nonlocal now
+            now += seconds
+
+        selected = wait_for_window(
+            title="VRChat",
+            poll_interval_seconds=0.5,
+            heartbeat_interval_seconds=0.5,
+            enumerate_windows=enumerate_windows,
+            monotonic=monotonic,
+            sleep=sleep,
+            heartbeat=heartbeats.append,
+        )
+
+        self.assertEqual(selected, target)
+        self.assertEqual(heartbeats, [0.5])
+
+    def test_wait_for_window_times_out(self):
+        now = 0.0
+
+        def monotonic() -> float:
+            return now
+
+        def sleep(seconds: float) -> None:
+            nonlocal now
+            now += seconds
+
+        with self.assertRaisesRegex(TimeoutError, "VRChat"):
+            wait_for_window(
+                title="VRChat",
+                timeout_seconds=1.0,
+                poll_interval_seconds=0.5,
+                enumerate_windows=lambda **_kwargs: [],
+                monotonic=monotonic,
+                sleep=sleep,
+            )
 
 
 class _CopyableFrame:
