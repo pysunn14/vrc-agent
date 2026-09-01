@@ -254,6 +254,7 @@ def _windows_track(args: argparse.Namespace) -> None:
             device=args.device,
         ),
         selector=TargetFusionSelector(
+            require_nameplate_identity=nameplate_tracker is not None,
             reacquire_after_missed_frames=args.reacquire_frames,
             desired_nameplate_width_ratio=args.nameplate_hold_width_ratio,
         ),

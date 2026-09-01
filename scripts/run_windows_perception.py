@@ -99,6 +99,7 @@ def print_heartbeat(status: PerceptionStatus) -> None:
         f"person_skipped={status.person_inference_skipped} "
         f"visible={status.target_visible} "
         f"source={status.target_source.value if status.target_source else '-'} "
+        f"identity={status.target_identity_acquired} "
         f"inference={inference} "
         f"ocr={'scanning' if status.nameplate_scanning else 'idle'} "
         f"ocr_scans={status.nameplate_scans_completed} "
@@ -181,6 +182,7 @@ def main() -> None:
         capture=capture,
         tracker=tracker,
         selector=TargetFusionSelector(
+            require_nameplate_identity=nameplate_tracker is not None,
             reacquire_after_missed_frames=args.reacquire_frames,
             desired_nameplate_width_ratio=args.nameplate_hold_width_ratio,
         ),

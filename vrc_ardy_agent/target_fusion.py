@@ -32,6 +32,7 @@ class TargetFusionSelector:
     def __init__(
         self,
         *,
+        require_nameplate_identity: bool = False,
         reacquire_after_missed_frames: int = 6,
         desired_nameplate_width_ratio: float = 0.16,
         hold_proximity: float = 0.45,
@@ -42,17 +43,24 @@ class TargetFusionSelector:
             raise ValueError("desired_nameplate_width_ratio must be in (0, 1]")
         if not 0.0 < hold_proximity <= 1.0:
             raise ValueError("hold_proximity must be in (0, 1]")
+        self.require_nameplate_identity = bool(require_nameplate_identity)
         self.reacquire_after_missed_frames = int(reacquire_after_missed_frames)
         self.desired_nameplate_width_ratio = float(desired_nameplate_width_ratio)
         self.hold_proximity = float(hold_proximity)
+        self._identity_acquired = False
         self._target_track_id: int | None = None
         self._missed_frames = 0
+
+    @property
+    def identity_acquired(self) -> bool:
+        return self._identity_acquired
 
     @property
     def target_track_id(self) -> int | None:
         return self._target_track_id
 
     def reset(self) -> None:
+        self._identity_acquired = False
         self._target_track_id = None
         self._missed_frames = 0
 
@@ -67,6 +75,7 @@ class TargetFusionSelector:
         candidates = list(detections)
 
         if nameplate is not None:
+            self._identity_acquired = True
             body = _associated_body(candidates, nameplate)
             if body is not None:
                 self._target_track_id = body.track_id
@@ -104,6 +113,12 @@ class TargetFusionSelector:
             if self._missed_frames < self.reacquire_after_missed_frames:
                 return None
             self.reset()
+        if self.require_nameplate_identity:
+            # A body without a current identity-bearing track can be a different
+            # avatar or even decorative world art. Only a new nameplate match may
+            # authorize another body track.
+            self.reset()
+            return None
         if not candidates:
             return None
         selected = max(candidates, key=lambda detection: detection.area)

@@ -92,6 +92,7 @@ class PerceptionStatus:
     person_inference_skipped: int = 0
     target_visible: bool = False
     target_source: TargetSource | None = None
+    target_identity_acquired: bool = False
     last_inference_seconds: float | None = None
     nameplate_running: bool = False
     nameplate_scanning: bool = False
@@ -225,6 +226,7 @@ class WindowsPerceptionRunner:
                         ),
                         target_visible=observation.visible,
                         target_source=observation.source,
+                        target_identity_acquired=self.selector.identity_acquired,
                         last_inference_seconds=inference_seconds,
                         heartbeat_monotonic=now,
                     )
