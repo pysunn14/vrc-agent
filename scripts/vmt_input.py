@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vrc_ardy_agent.vmt_input import (
     encode_vmt_button,
     encode_vmt_joystick,
+    encode_vmt_joystick_click,
     encode_vmt_trigger,
     hold_joystick,
 )
@@ -40,6 +41,14 @@ def parse_args() -> argparse.Namespace:
     button.add_argument("--index", type=int, required=True)
     button.add_argument("--button-index", type=int, required=True)
     button.add_argument("--duration", type=float, default=0.2)
+
+    joystick_click = sub.add_parser(
+        "joystick-click",
+        help="Press a VMT joystick, then release",
+    )
+    joystick_click.add_argument("--index", type=int, required=True)
+    joystick_click.add_argument("--joystick-index", type=int, default=0)
+    joystick_click.add_argument("--duration", type=float, default=0.2)
 
     return parser.parse_args()
 
@@ -83,7 +92,7 @@ def main() -> None:
             timeoffset=0.0,
             value=0.0,
         )
-    else:
+    elif args.command == "button":
         active = encode_vmt_button(
             index=args.index,
             button_index=args.button_index,
@@ -93,6 +102,19 @@ def main() -> None:
         neutral = encode_vmt_button(
             index=args.index,
             button_index=args.button_index,
+            timeoffset=0.0,
+            pressed=False,
+        )
+    else:
+        active = encode_vmt_joystick_click(
+            index=args.index,
+            joystick_index=args.joystick_index,
+            timeoffset=0.0,
+            pressed=True,
+        )
+        neutral = encode_vmt_joystick_click(
+            index=args.index,
+            joystick_index=args.joystick_index,
             timeoffset=0.0,
             pressed=False,
         )

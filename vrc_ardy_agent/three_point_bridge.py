@@ -8,6 +8,7 @@ from typing import Iterable, Iterator
 
 import numpy as np
 
+from .coordinate_space import ardy_to_unity_position, ardy_to_unity_rotation
 from .opentrack_bridge import OpenTrackFrame, encode_opentrack_packet, rotation_matrix_to_opentrack_ypr
 from .vmt_bridge import VmtFrame, encode_vmt_room_unity, matrix_to_quaternion_xyzw
 
@@ -79,8 +80,12 @@ def iter_three_point_frames(
         hmd_base_vec = np.asarray(hmd_base, dtype=np.float64)
 
         for frame_idx in range(positions.shape[0]):
-            head_delta_position = (positions[frame_idx, head_index] - base_head_position) * scale
-            head_delta_rotation = rotations[frame_idx, head_index] @ base_head_rotation.T
+            head_delta_position = ardy_to_unity_position(
+                (positions[frame_idx, head_index] - base_head_position) * scale
+            )
+            head_delta_rotation = ardy_to_unity_rotation(
+                rotations[frame_idx, head_index] @ base_head_rotation.T
+            )
 
             # VRto3D maps the OpenTrack packet to SteamVR as
             # {-X/100, -Y/100, Z/100}; pre-invert it here.
@@ -95,10 +100,14 @@ def iter_three_point_frames(
             )
 
             def hand_frame(joint_index: int) -> VmtFrame:
-                room_position = hmd_base_vec + (positions[frame_idx, joint_index] - base_head_position) * scale
+                room_position = hmd_base_vec + ardy_to_unity_position(
+                    (positions[frame_idx, joint_index] - base_head_position) * scale
+                )
                 # Use the same initial-head neutralization convention as the
                 # HMD path so both devices start in one orientation frame.
-                room_rotation = rotations[frame_idx, joint_index] @ base_head_rotation.T
+                room_rotation = ardy_to_unity_rotation(
+                    rotations[frame_idx, joint_index] @ base_head_rotation.T
+                )
                 return VmtFrame(
                     position=tuple(float(v) for v in room_position),
                     quaternion_xyzw=matrix_to_quaternion_xyzw(room_rotation),

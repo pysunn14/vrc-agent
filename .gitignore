@@ -1,5 +1,18 @@
-_local/docs/
+/_local/
 __pycache__/
 *.py[cod]
 .venv/
 yolov8*.pt
+node_modules/
+dist/
+*.tgz
+
+# Purchased avatar assets and exported avatar-specific data stay local.
+/vrc_ardy_agent/rig_profiles/
+*.avatar-rig.json
+*.unitypackage
+*.fbx
+*.blend
+*.vrm
+*.vrca
+*.psd

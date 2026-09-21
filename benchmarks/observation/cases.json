@@ -1,0 +1,368 @@
+{
+  "schema_version": 1,
+  "rubric_author": "agent_proposed",
+  "rubric_review_status": "approved_by_user_before_real_run",
+  "evidence": "자가 제작한 640×480 도형 그림. 실제 VRChat 장면과 사용자 발화 분포를 대표하지 않는다.",
+  "cases": [
+    {
+      "case_id": "n01",
+      "category": "nonvisual",
+      "transcript": "안녕, 루나!",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "짧게 인사한다. 장면 외형을 덧붙이지 않는다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n02",
+      "category": "nonvisual",
+      "transcript": "고마워, 덕분에 도움이 됐어.",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "감사에 자연스럽게 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n03",
+      "category": "nonvisual",
+      "transcript": "오늘 공부 시작하려는데 한마디 응원해줘.",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "공부를 응원한다. 현재 표정이나 외형을 단정하지 않는다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n04",
+      "category": "nonvisual",
+      "transcript": "2 더하기 3은 얼마야?",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "5라고 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n05",
+      "category": "nonvisual",
+      "transcript": "사과를 영어로 뭐라고 해?",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "apple이라고 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n06",
+      "category": "nonvisual",
+      "transcript": "오른손으로 짧게 손 흔들어줘.",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "오른손을 흔드는 ardy_motion을 계획한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n07",
+      "category": "nonvisual",
+      "transcript": "가볍게 고개를 끄덕여줘.",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "고개를 끄덕이는 ardy_motion을 계획한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n08",
+      "category": "nonvisual",
+      "transcript": "하품 한 번 해줘.",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "등록된 motion/yawn을 정확히 한 번 계획한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n09",
+      "category": "nonvisual",
+      "transcript": "제자리에서 짧게 박수 쳐줘.",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "박수 ardy_motion을 계획하며 이동을 추가하지 않는다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "n10",
+      "category": "nonvisual",
+      "transcript": "앞으로 3초 걸어줘.",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "motion/walk_forward를 duration_seconds=3으로 계획한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "v01",
+      "category": "visual",
+      "transcript": "화면 왼쪽 사각형은 무슨 색이야?",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "required",
+      "acceptable": "왼쪽 사각형이 빨간색이라고 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "v02",
+      "category": "visual",
+      "transcript": "화면 오른쪽 원은 무슨 색이야?",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "required",
+      "acceptable": "오른쪽 원이 파란색이라고 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "v03",
+      "category": "visual",
+      "transcript": "지금 화면에 도형이 모두 몇 개 있어?",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "required",
+      "acceptable": "두 개라고 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "v04",
+      "category": "visual",
+      "transcript": "지금 화면에 초록색 사각형이 몇 개 보여?",
+      "image": "images/three.jpg",
+      "image_sha256": "2920ded6eeffe34972ad522da22e7b245fced45cf730b0ae14d527dff7c848bb",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "required",
+      "acceptable": "세 개라고 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "v05",
+      "category": "visual",
+      "transcript": "화면에서 파란색 도형은 빨간색 도형의 왼쪽이야 오른쪽이야?",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "required",
+      "acceptable": "오른쪽이라고 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "v06",
+      "category": "visual",
+      "transcript": "지금 화면에 빨간색 원이 몇 개 보여?",
+      "image": "images/two_balls.jpg",
+      "image_sha256": "6b059a1eae1d2f52c6abdb074f96348356027ed53384ecf96d0d3c4312af3692",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "required",
+      "acceptable": "두 개라고 답한다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "a01",
+      "category": "ambiguous",
+      "transcript": "이거 무슨 색이야?",
+      "image": "images/mixed.jpg",
+      "image_sha256": "29a51c2921909894d8b175e5e92a6f03688d6284f191b0abb6d64fc871c99a19",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "required",
+      "acceptable": "두 도형 중 어느 것인지 질문하거나 각각의 색을 구분해서 설명한다. 임의로 하나를 선택하지 않는다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "a02",
+      "category": "ambiguous",
+      "transcript": "빨간색 원을 가리켜줘.",
+      "image": "images/two_balls.jpg",
+      "image_sha256": "6b059a1eae1d2f52c6abdb074f96348356027ed53384ecf96d0d3c4312af3692",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "required",
+      "acceptable": "빨간 원 두 개 중 어느 것인지 질문한다. 임의의 손짓이나 방향을 실행하지 않는다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "a03",
+      "category": "ambiguous",
+      "transcript": "지금 화면 밖에 있는 가방은 무슨 색이야?",
+      "image": "images/empty.jpg",
+      "image_sha256": "c187999399d164dd5ef49dbe6eb78efc72a17c3209a43639b697bccf71c26295",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "화면 밖이라 알 수 없다고 밝히거나 보여 달라고 한다. 관측 없이 보류해도 정답이다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    },
+    {
+      "case_id": "a04",
+      "category": "ambiguous",
+      "transcript": "저 닫힌 상자 안에 뭐가 들어 있어?",
+      "image": "images/three.jpg",
+      "image_sha256": "2920ded6eeffe34972ad522da22e7b245fced45cf730b0ae14d527dff7c848bb",
+      "source": "replay",
+      "initial_state": {
+        "body": "IDLE",
+        "speech": "IDLE",
+        "current_action_ids": [],
+        "last_error": null,
+        "tracking": "unknown"
+      },
+      "vision_requirement": "none",
+      "acceptable": "내부는 보이지 않으므로 알 수 없다고 밝히거나 확인을 요청한다. 이미지만 보고 내용물을 단정하지 않는다.",
+      "failure_criteria": "허용 답변/계획에 어긋나거나, 보이지 않는 사실을 단정하거나, 불필요한 이동을 계획하면 오답이다."
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import socket
 import struct
 import time
@@ -8,6 +9,47 @@ import time
 def _osc_string(value: str) -> bytes:
     raw = value.encode("utf-8") + b"\x00"
     return raw + (b"\x00" * ((-len(raw)) % 4))
+
+
+def _encode_vector3(address: str, value: tuple[float, float, float]) -> bytes:
+    if len(value) != 3:
+        raise ValueError("OSC Vector3 must contain exactly three values")
+    values = tuple(float(component) for component in value)
+    if any(not math.isfinite(component) for component in values):
+        raise ValueError("OSC Vector3 must contain only finite values")
+    return b"".join(
+        [
+            _osc_string(address),
+            _osc_string(",fff"),
+            struct.pack(">fff", *values),
+        ]
+    )
+
+
+def _tracker_address(index: int, component: str) -> str:
+    if isinstance(index, bool) or not isinstance(index, int) or not 1 <= index <= 8:
+        raise ValueError("VRChat OSC tracker index must be an integer from 1 to 8")
+    return f"/tracking/trackers/{index}/{component}"
+
+
+def encode_vrchat_tracker_position(
+    index: int,
+    position: tuple[float, float, float],
+) -> bytes:
+    return _encode_vector3(_tracker_address(index, "position"), position)
+
+
+def encode_vrchat_tracker_rotation(
+    index: int,
+    euler_deg: tuple[float, float, float],
+) -> bytes:
+    return _encode_vector3(_tracker_address(index, "rotation"), euler_deg)
+
+
+def encode_vrchat_head_tracker_position(
+    position: tuple[float, float, float],
+) -> bytes:
+    return _encode_vector3("/tracking/trackers/head/position", position)
 
 
 def encode_vrchat_axis(name: str, value: float) -> bytes:

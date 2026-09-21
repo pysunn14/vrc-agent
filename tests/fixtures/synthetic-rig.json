@@ -1,0 +1,235 @@
+{
+  "schemaVersion": 1,
+  "profileName": "test-avatar",
+  "units": "meters",
+  "coordinateSpace": "avatar_root_axes_head_relative",
+  "referencePose": "current_editor_pose",
+  "floorReference": "toes",
+  "referenceHeightMeters": 1.0,
+  "bones": [
+    {
+      "name": "head",
+      "positionMeters": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "hips",
+      "positionMeters": [
+        0.0,
+        -0.5,
+        0.01
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "leftUpperArm",
+      "positionMeters": [
+        -0.1,
+        -0.1,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "leftLowerArm",
+      "positionMeters": [
+        -0.25,
+        -0.1,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "leftHand",
+      "positionMeters": [
+        -0.4,
+        -0.1,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rightUpperArm",
+      "positionMeters": [
+        0.1,
+        -0.1,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rightLowerArm",
+      "positionMeters": [
+        0.25,
+        -0.1,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rightHand",
+      "positionMeters": [
+        0.4,
+        -0.1,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "leftUpperLeg",
+      "positionMeters": [
+        -0.05,
+        -0.52,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "leftLowerLeg",
+      "positionMeters": [
+        -0.05,
+        -0.75,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "leftFoot",
+      "positionMeters": [
+        -0.05,
+        -0.95,
+        0.05
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rightUpperLeg",
+      "positionMeters": [
+        0.05,
+        -0.52,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rightLowerLeg",
+      "positionMeters": [
+        0.05,
+        -0.75,
+        0.0
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rightFoot",
+      "positionMeters": [
+        0.05,
+        -0.95,
+        0.05
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "leftToes",
+      "positionMeters": [
+        -0.05,
+        -1.0,
+        0.15
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    },
+    {
+      "name": "rightToes",
+      "positionMeters": [
+        0.05,
+        -1.0,
+        0.15
+      ],
+      "rotationXyzw": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ]
+    }
+  ]
+}

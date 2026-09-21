@@ -10,6 +10,8 @@ from typing import Iterable, Iterator
 import numpy as np
 from scipy.spatial.transform import Rotation
 
+from .coordinate_space import ardy_to_unity_position, ardy_to_unity_rotation
+
 
 @dataclass(frozen=True)
 class OpenTrackFrame:
@@ -72,10 +74,14 @@ def iter_opentrack_frames(npz_path: str | Path, *, joint_index: int = 6) -> Iter
         base_rotation = rotations[0, joint_index].copy()
 
         for frame_idx in range(positions.shape[0]):
-            delta_position = positions[frame_idx, joint_index] - base_position
+            delta_position = ardy_to_unity_position(
+                positions[frame_idx, joint_index] - base_position
+            )
             # ARDY matrices describe the joint frame in world space. Remove the
             # initial head orientation so VRto3D receives motion around neutral.
-            delta_rotation = rotations[frame_idx, joint_index] @ base_rotation.T
+            delta_rotation = ardy_to_unity_rotation(
+                rotations[frame_idx, joint_index] @ base_rotation.T
+            )
 
             # VRto3D converts OpenTrack cm to SteamVR meters as:
             #   {-X / 100, -Y / 100, Z / 100}

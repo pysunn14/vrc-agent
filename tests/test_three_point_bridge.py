@@ -24,8 +24,8 @@ class ThreePointBridgeTests(unittest.TestCase):
             frame = next(iter_three_point_frames(source, hmd_base=(0.0, 1.0, 0.0)))
 
             self.assertEqual(frame.head.xyz_cm, (0.0, 0.0, 0.0))
-            np.testing.assert_allclose(frame.left.position, (0.4, 0.5, 0.2), atol=1e-6)
-            np.testing.assert_allclose(frame.right.position, (-0.4, 0.6, 0.1), atol=1e-6)
+            np.testing.assert_allclose(frame.left.position, (-0.4, 0.5, 0.2), atol=1e-6)
+            np.testing.assert_allclose(frame.right.position, (0.4, 0.6, 0.1), atol=1e-6)
             self.assertEqual(frame.fps, 20.0)
 
     def test_body_translation_moves_head_and_both_hands_together(self):
@@ -45,17 +45,17 @@ class ThreePointBridgeTests(unittest.TestCase):
 
             frames = list(iter_three_point_frames(source, hmd_base=(0.0, 1.0, 0.0)))
 
-            # OpenTrack packet values are pre-inverted so VRto3D reconstructs
-            # the same +0.1,+0.2,+0.3 m SteamVR translation.
-            np.testing.assert_allclose(frames[1].head.xyz_cm, (-10.0, -20.0, 30.0), atol=1e-4)
+            # ARDY X points left. It is mirrored before the packet is
+            # pre-inverted for VRto3D.
+            np.testing.assert_allclose(frames[1].head.xyz_cm, (10.0, -20.0, 30.0), atol=1e-4)
             np.testing.assert_allclose(
                 np.asarray(frames[1].left.position) - np.asarray(frames[0].left.position),
-                translation,
+                translation * np.array([-1.0, 1.0, 1.0], dtype=np.float32),
                 atol=1e-6,
             )
             np.testing.assert_allclose(
                 np.asarray(frames[1].right.position) - np.asarray(frames[0].right.position),
-                translation,
+                translation * np.array([-1.0, 1.0, 1.0], dtype=np.float32),
                 atol=1e-6,
             )
 

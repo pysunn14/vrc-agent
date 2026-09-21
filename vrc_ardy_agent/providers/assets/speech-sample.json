@@ -1,0 +1,10 @@
+{
+  "source": "https://download.pytorch.org/torchaudio/tutorial-assets/ctc-decoding/1688-142285-0007.wav",
+  "dataset": "LibriSpeech",
+  "utterance": "1688-142285-0007",
+  "license": "CC-BY-4.0",
+  "source_sha256": "67dfc27041e572bea27936e75eedc542ccf6f3af5cc251a0ab4e1e947d787fc8",
+  "sha256": "d27caaa0292fb38dad21f0a3c9847e41ba4e9895bb5c81258d0c8c3f84033ec8",
+  "modifications": "Float PCM converted using round(clip(x,-1,1)*32767) to 16 kHz mono int16 PCM WAV; complete utterance.",
+  "language": "en"
+}

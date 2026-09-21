@@ -4,7 +4,7 @@ import threading
 import time
 import unittest
 
-from vrc_ardy_agent.live_session import LiveArdySession
+from vrc_ardy_agent.live_session import LiveArdySession, PromptPlaybackStarted
 
 
 class _FakeChunk:
@@ -56,6 +56,32 @@ class _FakeSink:
 
 
 class LiveArdySessionTests(unittest.TestCase):
+    def test_stop_waits_for_the_generation_worker_without_abandoning_it(self):
+        runtime = _FakeRuntime()
+        sink = _FakeSink()
+        session = LiveArdySession(
+            runtime=runtime,
+            mapper=_FakeMapper(),
+            sink=sink,
+            replan_threshold_frames=1,
+        )
+
+        class FinishingThread:
+            def __init__(self) -> None:
+                self.join_timeouts = []
+
+            def join(self, timeout=None) -> None:
+                self.join_timeouts.append(timeout)
+
+        worker = FinishingThread()
+        session._producer_thread = worker
+        session._started = True
+
+        session.stop()
+
+        self.assertEqual(worker.join_timeouts, [None])
+        self.assertTrue(sink.closed)
+
     def test_replans_in_background_and_plays_consecutive_frames(self):
         runtime = _FakeRuntime()
         sink = _FakeSink()
@@ -84,12 +110,27 @@ class LiveArdySessionTests(unittest.TestCase):
             replan_threshold_frames=1,
         )
 
-        session.start("walk")
-        session.set_prompt("wave while walking")
-        session.run_started(max_frames=6, realtime=False)
+        initial_revision = session.start("walk")
+        wave_revision = session.set_prompt("wave while walking")
+        playback_events: list[PromptPlaybackStarted] = []
+        session.run_started(
+            max_frames=6,
+            realtime=False,
+            prompt_started=playback_events.append,
+        )
 
         self.assertIn("wave while walking", runtime.prompt_calls)
-        self.assertEqual(session.status.prompt, "wave while walking")
+        self.assertEqual(session.status.requested_prompt, "wave while walking")
+        self.assertEqual(initial_revision, 1)
+        self.assertEqual(wave_revision, 2)
+        self.assertEqual(
+            [(event.revision, event.prompt) for event in playback_events],
+            [(1, "walk"), (2, "wave while walking")],
+        )
+        self.assertEqual(playback_events[0].played_frames, 1)
+        self.assertGreater(playback_events[1].played_frames, 1)
+        self.assertEqual(session.status.playing_prompt_revision, wave_revision)
+        self.assertEqual(session.status.playing_prompt, "wave while walking")
 
     def test_pause_neutralizes_inputs_and_next_prompt_resumes(self):
         runtime = _FakeRuntime()
@@ -110,7 +151,7 @@ class LiveArdySessionTests(unittest.TestCase):
         session.set_prompt("wave")
 
         self.assertFalse(session.status.paused)
-        self.assertEqual(session.status.prompt, "wave")
+        self.assertEqual(session.status.requested_prompt, "wave")
         session.request_stop()
         session.stop()
 
@@ -144,6 +185,33 @@ class LiveArdySessionTests(unittest.TestCase):
 
         self.assertEqual(len(sink.send_times), 3)
         self.assertGreaterEqual(sink.send_times[2] - sink.send_times[1], 0.03)
+
+    def test_external_cancel_event_stops_playback(self):
+        runtime = _FakeRuntime()
+        cancel = threading.Event()
+
+        class CancellingSink(_FakeSink):
+            def send(self, frame: int) -> None:
+                super().send(frame)
+                cancel.set()
+
+        sink = CancellingSink()
+        session = LiveArdySession(
+            runtime=runtime,
+            mapper=_FakeMapper(),
+            sink=sink,
+            replan_threshold_frames=1,
+        )
+
+        session.run(
+            prompt="wave",
+            duration_seconds=5,
+            realtime=False,
+            cancel_event=cancel,
+        )
+
+        self.assertEqual(sink.frames, [0])
+        self.assertFalse(session.status.running)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,12 @@ from typing import Any, Callable
 class LiveSessionStatus:
     running: bool = False
     paused: bool = False
-    prompt: str | None = None
+    requested_prompt: str | None = None
+    requested_prompt_revision: int = 0
+    generated_prompt: str | None = None
+    generated_prompt_revision: int = 0
+    playing_prompt: str | None = None
+    playing_prompt_revision: int = 0
     buffered_frames: int = 0
     played_frames: int = 0
     generated_chunks: int = 0
@@ -19,6 +24,26 @@ class LiveSessionStatus:
     last_generation_seconds: float | None = None
     underruns: int = 0
     heartbeat_monotonic: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
+class PromptPlaybackStarted:
+    revision: int
+    prompt: str
+    played_frames: int
+    started_monotonic: float
+
+
+@dataclass(frozen=True, slots=True)
+class _PromptRequest:
+    revision: int
+    prompt: str
+
+
+@dataclass(frozen=True, slots=True)
+class _BufferedMotionFrame:
+    frame: Any
+    prompt_request: _PromptRequest
 
 
 class LiveArdySession:
@@ -57,12 +82,13 @@ class LiveArdySession:
             raise ValueError("replan_threshold_frames must be in [0, horizon)")
         self.replan_threshold_frames = int(replan_threshold_frames)
 
-        self._buffer: deque[Any] = deque()
+        self._buffer: deque[_BufferedMotionFrame] = deque()
         self._condition = threading.Condition()
         self._stop_event = threading.Event()
         self._producer_thread: threading.Thread | None = None
-        self._desired_prompt: str | None = None
-        self._active_prompt: str | None = None
+        self._next_prompt_revision = 0
+        self._requested_prompt: _PromptRequest | None = None
+        self._generating_prompt: _PromptRequest | None = None
         self._producer_error: BaseException | None = None
         self._started = False
         self._paused = False
@@ -73,7 +99,7 @@ class LiveArdySession:
         with self._condition:
             return replace(self._status, buffered_frames=len(self._buffer))
 
-    def start(self, prompt: str) -> None:
+    def start(self, prompt: str) -> int:
         prompt = prompt.strip()
         if not prompt:
             raise ValueError("prompt must not be empty")
@@ -81,11 +107,13 @@ class LiveArdySession:
             if self._started:
                 raise RuntimeError("live session is already started")
             self._started = True
-            self._desired_prompt = prompt
+            request = self._new_prompt_request_locked(prompt)
+            self._requested_prompt = request
             self._status = replace(
                 self._status,
                 running=True,
-                prompt=prompt,
+                requested_prompt=prompt,
+                requested_prompt_revision=request.revision,
                 heartbeat_monotonic=time.monotonic(),
             )
 
@@ -93,16 +121,21 @@ class LiveArdySession:
             # Prefill one horizon synchronously so playback never starts from
             # an empty buffer. Later horizons are produced in the background.
             self.runtime.set_prompt(prompt)
-            self._active_prompt = prompt
+            self._generating_prompt = request
             chunk = self.runtime.generate_next()
             frames = self.mapper.map_chunk(chunk)
             if not frames:
                 raise RuntimeError("ARDY generated an empty first horizon")
             with self._condition:
-                self._buffer.extend(frames)
+                self._buffer.extend(
+                    _BufferedMotionFrame(frame=frame, prompt_request=request)
+                    for frame in frames
+                )
                 self._status = replace(
                     self._status,
                     generated_chunks=1,
+                    generated_prompt=request.prompt,
+                    generated_prompt_revision=request.revision,
                     last_generation_seconds=float(chunk.generation_seconds),
                     buffered_frames=len(self._buffer),
                 )
@@ -118,18 +151,27 @@ class LiveArdySession:
             daemon=True,
         )
         self._producer_thread.start()
+        return request.revision
 
-    def set_prompt(self, prompt: str) -> None:
+    def set_prompt(self, prompt: str) -> int:
         prompt = prompt.strip()
         if not prompt:
             raise ValueError("prompt must not be empty")
         with self._condition:
             if not self._started:
                 raise RuntimeError("start the live session before changing its prompt")
-            self._desired_prompt = prompt
+            request = self._new_prompt_request_locked(prompt)
+            self._requested_prompt = request
             self._paused = False
-            self._status = replace(self._status, prompt=prompt, paused=False)
+            self._status = replace(
+                self._status,
+                requested_prompt=prompt,
+                requested_prompt_revision=request.revision,
+                paused=False,
+                heartbeat_monotonic=time.monotonic(),
+            )
             self._condition.notify_all()
+            return request.revision
 
     def pause(self) -> None:
         with self._condition:
@@ -158,16 +200,20 @@ class LiveArdySession:
         duration_seconds: float | None = None,
         max_frames: int | None = None,
         realtime: bool = True,
+        cancel_event: threading.Event | None = None,
         heartbeat_interval_seconds: float = 2.0,
         heartbeat: Callable[[LiveSessionStatus], None] | None = None,
+        prompt_started: Callable[[PromptPlaybackStarted], None] | None = None,
     ) -> LiveSessionStatus:
         self.start(prompt)
         return self.run_started(
             duration_seconds=duration_seconds,
             max_frames=max_frames,
             realtime=realtime,
+            cancel_event=cancel_event,
             heartbeat_interval_seconds=heartbeat_interval_seconds,
             heartbeat=heartbeat,
+            prompt_started=prompt_started,
         )
 
     def run_started(
@@ -176,8 +222,10 @@ class LiveArdySession:
         duration_seconds: float | None = None,
         max_frames: int | None = None,
         realtime: bool = True,
+        cancel_event: threading.Event | None = None,
         heartbeat_interval_seconds: float = 2.0,
         heartbeat: Callable[[LiveSessionStatus], None] | None = None,
+        prompt_started: Callable[[PromptPlaybackStarted], None] | None = None,
     ) -> LiveSessionStatus:
         if duration_seconds is not None and duration_seconds <= 0:
             raise ValueError("duration_seconds must be positive")
@@ -200,6 +248,9 @@ class LiveArdySession:
 
         try:
             while not self._stop_event.is_set():
+                if cancel_event is not None and cancel_event.is_set():
+                    self.request_stop()
+                    break
                 current = self.status
                 if max_frames is not None and current.played_frames >= max_frames:
                     break
@@ -220,15 +271,29 @@ class LiveArdySession:
                     next_frame_deadline = time.perf_counter()
                     playback_clock_needs_reset = False
 
-                frame = self._pop_next_frame()
-                self.sink.send(frame)
+                buffered = self._pop_next_frame()
+                self.sink.send(buffered.frame)
+                playback_event: PromptPlaybackStarted | None = None
                 with self._condition:
+                    played_frames = self._status.played_frames + 1
+                    request = buffered.prompt_request
+                    if request.revision != self._status.playing_prompt_revision:
+                        playback_event = PromptPlaybackStarted(
+                            revision=request.revision,
+                            prompt=request.prompt,
+                            played_frames=played_frames,
+                            started_monotonic=time.monotonic(),
+                        )
                     self._status = replace(
                         self._status,
-                        played_frames=self._status.played_frames + 1,
+                        played_frames=played_frames,
+                        playing_prompt=request.prompt,
+                        playing_prompt_revision=request.revision,
                         buffered_frames=len(self._buffer),
                         heartbeat_monotonic=time.monotonic(),
                     )
+                if playback_event is not None and prompt_started is not None:
+                    prompt_started(playback_event)
 
                 if realtime:
                     next_frame_deadline += 1.0 / fps
@@ -249,7 +314,11 @@ class LiveArdySession:
         self.request_stop()
         thread = self._producer_thread
         if thread is not None and thread is not threading.current_thread():
-            thread.join(timeout=5.0)
+            # ARDY generation itself is not cancellable. Abandoning this worker
+            # would let CharacterSupervisor start the next action against the
+            # same resident model while the old generation still mutates its
+            # history, so shutdown must wait for the authoritative worker end.
+            thread.join()
         self.sink.close()
         with self._condition:
             self._started = False
@@ -273,14 +342,17 @@ class LiveArdySession:
                     )
                     if self._stop_event.is_set():
                         return
-                    prompt = self._desired_prompt
+                    request = self._requested_prompt
                     self._status = replace(self._status, generation_in_progress=True)
 
-                if prompt is None:
+                if request is None:
                     raise RuntimeError("live session has no prompt")
-                if prompt != self._active_prompt:
-                    self.runtime.set_prompt(prompt)
-                    self._active_prompt = prompt
+                if (
+                    self._generating_prompt is None
+                    or request.revision != self._generating_prompt.revision
+                ):
+                    self.runtime.set_prompt(request.prompt)
+                    self._generating_prompt = request
 
                 chunk = self.runtime.generate_next()
                 frames = self.mapper.map_chunk(chunk)
@@ -288,10 +360,15 @@ class LiveArdySession:
                     raise RuntimeError("ARDY generated an empty horizon")
 
                 with self._condition:
-                    self._buffer.extend(frames)
+                    self._buffer.extend(
+                        _BufferedMotionFrame(frame=frame, prompt_request=request)
+                        for frame in frames
+                    )
                     self._status = replace(
                         self._status,
                         generated_chunks=self._status.generated_chunks + 1,
+                        generated_prompt=request.prompt,
+                        generated_prompt_revision=request.revision,
                         generation_in_progress=False,
                         last_generation_seconds=float(chunk.generation_seconds),
                         buffered_frames=len(self._buffer),
@@ -304,7 +381,7 @@ class LiveArdySession:
                 self._status = replace(self._status, generation_in_progress=False)
                 self._condition.notify_all()
 
-    def _pop_next_frame(self) -> Any:
+    def _pop_next_frame(self) -> _BufferedMotionFrame:
         counted_underrun = False
         with self._condition:
             while not self._buffer:
@@ -322,3 +399,7 @@ class LiveArdySession:
             self._status = replace(self._status, buffered_frames=len(self._buffer))
             self._condition.notify_all()
             return frame
+
+    def _new_prompt_request_locked(self, prompt: str) -> _PromptRequest:
+        self._next_prompt_revision += 1
+        return _PromptRequest(revision=self._next_prompt_revision, prompt=prompt)

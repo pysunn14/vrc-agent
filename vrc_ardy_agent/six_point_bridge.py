@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 import socket
 import time
@@ -8,10 +8,26 @@ from typing import Iterable, Iterator
 
 import numpy as np
 
+from .asset_contract import face_values
+from .coordinate_space import ardy_to_unity_position, ardy_to_unity_rotation
 from .locomotion import compute_smoothed_heading_angles, iter_locomotion_frames
 from .opentrack_bridge import OpenTrackFrame, encode_opentrack_packet, rotation_matrix_to_opentrack_ypr
 from .vmt_bridge import VmtFrame, encode_vmt_room_unity, matrix_to_quaternion_xyzw
 from .vrchat_osc import encode_vrchat_axis
+
+
+@dataclass(frozen=True)
+class TrackerActivation:
+    left: bool = True
+    right: bool = True
+    hips: bool = True
+    left_foot: bool = True
+    right_foot: bool = True
+
+    def __post_init__(self) -> None:
+        for name in ("left", "right", "hips", "left_foot", "right_foot"):
+            if type(getattr(self, name)) is not bool:
+                raise TypeError(f"{name} tracker activation must be a bool")
 
 
 @dataclass(frozen=True)
@@ -27,6 +43,14 @@ class SixPointFrame:
     locomotion_x: float
     locomotion_y: float
     locomotion_turn: float
+    tracker_activation: TrackerActivation = field(default_factory=TrackerActivation)
+    face: tuple[tuple[str, float], ...] = ()
+
+    def __post_init__(self):
+        values = dict(self.face)
+        if len(values) != len(self.face): raise ValueError("duplicate face parameter")
+        face_values(values)
+        object.__setattr__(self, "face", tuple(sorted((key, float(value)) for key, value in values.items())))
 
 
 def _yaw_matrix(angle_rad: float) -> np.ndarray:
@@ -207,8 +231,12 @@ def iter_six_point_frames(
 
         def vmt_frame(frame_idx: int, joint_index: int) -> VmtFrame:
             position = stabilized_position(frame_idx, joint_index)
-            room_position = hmd_base_vec + (position - base_head_position) * resolved_scale
-            room_rotation = stabilized_rotation(frame_idx, joint_index) @ base_head_rotation.T
+            room_position = hmd_base_vec + ardy_to_unity_position(
+                (position - base_head_position) * resolved_scale
+            )
+            room_rotation = ardy_to_unity_rotation(
+                stabilized_rotation(frame_idx, joint_index) @ base_head_rotation.T
+            )
             return VmtFrame(
                 position=tuple(float(v) for v in room_position),
                 quaternion_xyzw=matrix_to_quaternion_xyzw(room_rotation),
@@ -217,8 +245,12 @@ def iter_six_point_frames(
 
         for frame_idx in range(positions.shape[0]):
             stabilized_head = stabilized_position(frame_idx, head_index)
-            head_delta_position = (stabilized_head - base_head_position) * resolved_scale
-            head_delta_rotation = stabilized_rotation(frame_idx, head_index) @ base_head_rotation.T
+            head_delta_position = ardy_to_unity_position(
+                (stabilized_head - base_head_position) * resolved_scale
+            )
+            head_delta_rotation = ardy_to_unity_rotation(
+                stabilized_rotation(frame_idx, head_index) @ base_head_rotation.T
+            )
             head = OpenTrackFrame(
                 xyz_cm=(
                     -100.0 * float(head_delta_position[0]),

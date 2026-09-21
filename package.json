@@ -1,0 +1,37 @@
+{
+  "name": "vrc-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Terminal runner for a provider-independent VRChat agent",
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "bin": {
+    "vrc-agent": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p cli/tsconfig.json",
+    "dev": "tsx cli/src/cli.ts",
+    "start": "node dist/cli.js",
+    "test": "tsx --test cli/test/*.test.ts",
+    "check": "tsc -p cli/tsconfig.json --noEmit",
+    "agentctl": "tsx cli/dev/agentctl.ts"
+  },
+  "dependencies": {
+    "@clack/prompts": "1.8.1",
+    "@earendil-works/pi-tui": "0.85.1",
+    "chalk": "5.6.2",
+    "figlet": "1.11.0"
+  },
+  "devDependencies": {
+    "@types/figlet": "1.7.0",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}

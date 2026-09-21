@@ -31,8 +31,8 @@ class SixPointBridgeTests(unittest.TestCase):
 
             self.assertAlmostEqual(frame.scale, 0.5, places=6)
             self.assertEqual(frame.head.xyz_cm, (0.0, 0.0, 0.0))
-            np.testing.assert_allclose(frame.left_foot.position, (0.05, 0.05, 0.0), atol=1e-6)
-            np.testing.assert_allclose(frame.right_foot.position, (-0.05, 0.05, 0.0), atol=1e-6)
+            np.testing.assert_allclose(frame.left_foot.position, (-0.05, 0.05, 0.0), atol=1e-6)
+            np.testing.assert_allclose(frame.right_foot.position, (0.05, 0.05, 0.0), atol=1e-6)
             np.testing.assert_allclose(frame.hips.position, (0.0, 0.55, 0.0), atol=1e-6)
 
     def test_body_translation_moves_all_six_points_together(self):
@@ -56,13 +56,14 @@ class SixPointBridgeTests(unittest.TestCase):
             path = self._write_motion(Path(tmp), positions, rotations)
 
             frames = list(iter_six_point_frames(path, hmd_base=(0.0, 1.0, 0.0)))
-            expected = delta * 0.5
+            expected = delta * np.array([-0.5, 0.5, 0.5], dtype=np.float32)
             for attr in ("left", "right", "hips", "left_foot", "right_foot"):
                 p0 = np.asarray(getattr(frames[0], attr).position)
                 p1 = np.asarray(getattr(frames[1], attr).position)
                 np.testing.assert_allclose(p1 - p0, expected, atol=1e-6)
-            # VRto3D OpenTrack packet is pre-inverted on X/Y and in centimeters.
-            np.testing.assert_allclose(frames[1].head.xyz_cm, (-10.0, -5.0, 15.0), atol=1e-5)
+            # ARDY X points left. After the Unity-space mirror and VRto3D's
+            # packet inversion, this becomes a positive packet X value.
+            np.testing.assert_allclose(frames[1].head.xyz_cm, (10.0, -5.0, 15.0), atol=1e-5)
 
     def test_horizontal_root_motion_can_be_removed_from_tracking_pose(self):
         with tempfile.TemporaryDirectory() as tmp:

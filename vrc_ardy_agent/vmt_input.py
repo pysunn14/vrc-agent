@@ -6,6 +6,7 @@ import time
 
 
 VMT_INPUT_JOYSTICK = "/VMT/Input/Joystick"
+VMT_INPUT_JOYSTICK_CLICK = "/VMT/Input/Joystick/Click"
 VMT_INPUT_TRIGGER = "/VMT/Input/Trigger"
 VMT_INPUT_BUTTON = "/VMT/Input/Button"
 
@@ -62,6 +63,25 @@ def encode_vmt_trigger(
             _osc_string(",iiff"),
             struct.pack(">ii", int(index), int(trigger_index)),
             struct.pack(">ff", float(timeoffset), value),
+        ]
+    )
+
+
+def encode_vmt_joystick_click(
+    *,
+    index: int,
+    joystick_index: int,
+    timeoffset: float,
+    pressed: bool,
+) -> bytes:
+    if not 0 <= joystick_index <= 3:
+        raise ValueError(f"joystick_index must be in [0, 3], got {joystick_index}")
+    return b"".join(
+        [
+            _osc_string(VMT_INPUT_JOYSTICK_CLICK),
+            _osc_string(",iifi"),
+            struct.pack(">ii", int(index), int(joystick_index)),
+            struct.pack(">fi", float(timeoffset), 1 if pressed else 0),
         ]
     )
 

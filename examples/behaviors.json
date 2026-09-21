@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "behaviors": {
+    "wave": {
+      "source": "ardy",
+      "description": "손을 가볍게 흔들어 인사합니다.",
+      "prompt": "Wave one hand gently.",
+      "duration_seconds": 3
+    },
+    "walk_forward": {
+      "source": "locomotion",
+      "description": "짧게 앞으로 걷습니다.",
+      "velocity": [0, 0.18, 0],
+      "duration_seconds": 5
+    },
+    "walk_backward": {
+      "source": "locomotion",
+      "description": "짧게 뒤로 걷습니다.",
+      "velocity": [0, -0.18, 0],
+      "duration_seconds": 5
+    }
+  }
+}

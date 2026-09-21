@@ -1,14 +1,44 @@
 from __future__ import annotations
 
 from collections import deque
+from enum import Enum
 import math
 
 import numpy as np
 
 from .ardy_runtime import ArdyMotionChunk
+from .avatar_rig_profile import AvatarRigProfile
+from .coordinate_space import ardy_to_unity_position, ardy_to_unity_rotation
+from .humanoid_retargeting import (
+    ARDY_ARM_JOINTS,
+    HumanoidArmJoints,
+    HumanoidRetargeter,
+    RetargetingMonitor,
+)
+from .lower_body_retargeting import (
+    ARDY_LOWER_BODY_JOINTS,
+    LowerBodyJoints,
+    LowerBodyRotationMode,
+    LowerBodyRetargeter,
+    LowerBodyRetargetingMonitor,
+    LowerBodySafetyLimits,
+    RetargetedBodyTracker,
+)
 from .opentrack_bridge import OpenTrackFrame, rotation_matrix_to_opentrack_ypr
-from .six_point_bridge import SixPointFrame, _resolve_scale, _validate_motion_arrays, _yaw_matrix
+from .six_point_bridge import (
+    SixPointFrame,
+    TrackerActivation,
+    _resolve_scale,
+    _validate_motion_arrays,
+    _yaw_matrix,
+)
+from .tracking_rig import RigCalibration
 from .vmt_bridge import VmtFrame, matrix_to_quaternion_xyzw
+
+
+class RetargetingMode(str, Enum):
+    FULL = "full"
+    LOWER_BODY_POSITION_ONLY = "lower-body-position-only"
 
 
 class SixPointStreamMapper:
@@ -23,14 +53,10 @@ class SixPointStreamMapper:
     def __init__(
         self,
         *,
+        avatar_profile: AvatarRigProfile,
         head_index: int = 6,
-        left_index: int = 16,
-        right_index: int = 10,
-        hips_index: int = 0,
-        left_foot_index: int = 25,
-        right_foot_index: int = 21,
-        left_toe_index: int = 26,
-        right_toe_index: int = 22,
+        arm_joints: HumanoidArmJoints = ARDY_ARM_JOINTS,
+        lower_body_joints: LowerBodyJoints = ARDY_LOWER_BODY_JOINTS,
         hmd_base: tuple[float, float, float] = (0.0, 1.0, 0.0),
         scale: float | None = None,
         full_stick_speed_mps: float = 2.5,
@@ -38,6 +64,10 @@ class SixPointStreamMapper:
         full_turn_speed_dps: float = 180.0,
         turn_deadzone_dps: float = 12.0,
         heading_smoothing_seconds: float = 0.5,
+        retargeting_monitor: RetargetingMonitor | None = None,
+        lower_body_monitor: LowerBodyRetargetingMonitor | None = None,
+        lower_body_limits: LowerBodySafetyLimits | None = None,
+        retargeting_mode: RetargetingMode = RetargetingMode.FULL,
     ) -> None:
         if len(hmd_base) != 3:
             raise ValueError("hmd_base must contain exactly three values")
@@ -51,15 +81,14 @@ class SixPointStreamMapper:
             raise ValueError("turn_deadzone_dps must be non-negative")
         if heading_smoothing_seconds < 0:
             raise ValueError("heading_smoothing_seconds must be non-negative")
+        if not isinstance(retargeting_mode, RetargetingMode):
+            raise TypeError("retargeting_mode must be a RetargetingMode")
 
         self.head_index = head_index
-        self.left_index = left_index
-        self.right_index = right_index
-        self.hips_index = hips_index
-        self.left_foot_index = left_foot_index
-        self.right_foot_index = right_foot_index
-        self.left_toe_index = left_toe_index
-        self.right_toe_index = right_toe_index
+        self.avatar_profile = avatar_profile
+        self.rig_calibration = RigCalibration.from_avatar_profile(avatar_profile)
+        self.arm_joints = arm_joints
+        self.lower_body_joints = lower_body_joints
         self.hmd_base = tuple(float(v) for v in hmd_base)
         self.requested_scale = scale
         self.full_stick_speed_mps = float(full_stick_speed_mps)
@@ -67,6 +96,10 @@ class SixPointStreamMapper:
         self.full_turn_speed_dps = float(full_turn_speed_dps)
         self.turn_deadzone_dps = float(turn_deadzone_dps)
         self.heading_smoothing_seconds = float(heading_smoothing_seconds)
+        self.retargeting_monitor = retargeting_monitor or RetargetingMonitor()
+        self.lower_body_monitor = lower_body_monitor or LowerBodyRetargetingMonitor()
+        self.lower_body_limits = lower_body_limits or LowerBodySafetyLimits()
+        self.retargeting_mode = retargeting_mode
 
         self._fps: float | None = None
         self._scale: float | None = None
@@ -78,6 +111,8 @@ class SixPointStreamMapper:
         self._last_unwrapped_heading: float | None = None
         self._last_smoothed_heading: float | None = None
         self._heading_window: deque[float] | None = None
+        self._retargeter: HumanoidRetargeter | None = None
+        self._lower_body_retargeter: LowerBodyRetargeter | None = None
 
     @property
     def scale(self) -> float | None:
@@ -94,6 +129,13 @@ class SixPointStreamMapper:
         self._last_unwrapped_heading = None
         self._last_smoothed_heading = None
         self._heading_window = None
+        self._retargeter = None
+        self._lower_body_retargeter = None
+        self.retargeting_monitor.reset(self.rig_calibration.name)
+        self.lower_body_monitor.reset(
+            self.avatar_profile.name,
+            self._lower_body_rotation_mode(),
+        )
 
     def map_chunk(self, chunk: ArdyMotionChunk) -> list[SixPointFrame]:
         positions = np.asarray(chunk.posed_joints, dtype=np.float64)
@@ -104,13 +146,17 @@ class SixPointStreamMapper:
 
         indices = (
             self.head_index,
-            self.left_index,
-            self.right_index,
-            self.hips_index,
-            self.left_foot_index,
-            self.right_foot_index,
-            self.left_toe_index,
-            self.right_toe_index,
+            self.arm_joints.left.shoulder,
+            self.arm_joints.left.elbow,
+            self.arm_joints.left.wrist,
+            self.arm_joints.right.shoulder,
+            self.arm_joints.right.elbow,
+            self.arm_joints.right.wrist,
+            self.lower_body_joints.hips,
+            self.lower_body_joints.left_foot,
+            self.lower_body_joints.right_foot,
+            self.lower_body_joints.left_toe,
+            self.lower_body_joints.right_toe,
         )
         _validate_motion_arrays(positions, rotations, indices, fps)
         if roots.shape != (positions.shape[0], 3):
@@ -164,8 +210,8 @@ class SixPointStreamMapper:
         self._scale = _resolve_scale(
             positions,
             head_index=self.head_index,
-            left_toe_index=self.left_toe_index,
-            right_toe_index=self.right_toe_index,
+            left_toe_index=self.lower_body_joints.left_toe,
+            right_toe_index=self.lower_body_joints.right_toe,
             hmd_base=self.hmd_base,
             scale=self.requested_scale,
         )
@@ -178,6 +224,28 @@ class SixPointStreamMapper:
         self._initial_heading = initial_heading
         window_frames = max(1, int(round(self.heading_smoothing_seconds * fps)))
         self._heading_window = deque(maxlen=window_frames)
+        self._retargeter = HumanoidRetargeter(
+            calibration=self.rig_calibration,
+            source_joints=self.arm_joints,
+            hmd_base=self.hmd_base,
+            body_scale=self._scale,
+            monitor=self.retargeting_monitor,
+        )
+        self._lower_body_retargeter = LowerBodyRetargeter(
+            avatar_profile=self.avatar_profile,
+            source_joints=self.lower_body_joints,
+            hmd_base=self.hmd_base,
+            body_scale=self._scale,
+            fps=fps,
+            limits=self.lower_body_limits,
+            monitor=self.lower_body_monitor,
+            rotation_mode=self._lower_body_rotation_mode(),
+        )
+
+    def _lower_body_rotation_mode(self) -> LowerBodyRotationMode:
+        if self.retargeting_mode is RetargetingMode.LOWER_BODY_POSITION_ONLY:
+            return LowerBodyRotationMode.PROFILE_NEUTRAL
+        return LowerBodyRotationMode.SOURCE_DELTA
 
     def _unwrap_heading(self, heading: np.ndarray) -> float:
         raw = math.atan2(float(heading[1]), float(heading[0]))
@@ -214,6 +282,8 @@ class SixPointStreamMapper:
             or self._base_head_rotation is None
             or self._initial_root is None
             or self._initial_heading is None
+            or self._retargeter is None
+            or self._lower_body_retargeter is None
         ):
             raise RuntimeError("stream mapper is not initialized")
 
@@ -255,49 +325,97 @@ class SixPointStreamMapper:
         else:
             locomotion_turn = max(-1.0, min(1.0, turn_dps / self.full_turn_speed_dps))
 
+        stabilized_positions = (
+            root
+            + np.einsum("ij,kj->ki", remove_yaw, positions[frame_idx] - root)
+            - horizontal_root_delta
+        )
+        stabilized_rotations = np.einsum(
+            "ij,kjl->kil", remove_yaw, rotations[frame_idx]
+        )
+
         def stabilized_position(joint_index: int) -> np.ndarray:
-            position = positions[frame_idx, joint_index]
-            yaw_removed = root + remove_yaw @ (position - root)
-            return yaw_removed - horizontal_root_delta
+            return stabilized_positions[joint_index]
 
         def stabilized_rotation(joint_index: int) -> np.ndarray:
-            return remove_yaw @ rotations[frame_idx, joint_index]
+            return stabilized_rotations[joint_index]
 
-        hmd_base_vec = np.asarray(self.hmd_base, dtype=np.float64)
+        retargeted_hands = None
+        if self.retargeting_mode is RetargetingMode.FULL:
+            retargeted_hands = self._retargeter.retarget(
+                stabilized_positions,
+                stabilized_rotations,
+            )
+        retargeted_lower_body = self._lower_body_retargeter.retarget(
+            stabilized_positions,
+            stabilized_rotations,
+        )
 
-        def vmt_frame(joint_index: int) -> VmtFrame:
-            position = stabilized_position(joint_index)
-            room_position = hmd_base_vec + (position - self._base_head_position) * self._scale
-            room_rotation = stabilized_rotation(joint_index) @ self._base_head_rotation.T
+        def retargeted_hand_frame(side: str) -> VmtFrame:
+            if retargeted_hands is None:
+                return VmtFrame(
+                    position=(0.0, 0.0, 0.0),
+                    quaternion_xyzw=(0.0, 0.0, 0.0, 1.0),
+                    fps=fps,
+                )
+            hand = (
+                retargeted_hands.left
+                if side == "left"
+                else retargeted_hands.right
+            )
             return VmtFrame(
-                position=tuple(float(v) for v in room_position),
-                quaternion_xyzw=matrix_to_quaternion_xyzw(room_rotation),
+                position=tuple(float(value) for value in hand.position),
+                quaternion_xyzw=matrix_to_quaternion_xyzw(hand.rotation),
                 fps=fps,
             )
 
-        head_position = stabilized_position(self.head_index)
-        head_delta_position = (head_position - self._base_head_position) * self._scale
-        head_rotation = stabilized_rotation(self.head_index) @ self._base_head_rotation.T
-        head = OpenTrackFrame(
-            xyz_cm=(
-                -100.0 * float(head_delta_position[0]),
-                -100.0 * float(head_delta_position[1]),
-                100.0 * float(head_delta_position[2]),
-            ),
-            ypr_deg=rotation_matrix_to_opentrack_ypr(head_rotation),
-            fps=fps,
-        )
+        def retargeted_body_frame(tracker: RetargetedBodyTracker) -> VmtFrame:
+            return VmtFrame(
+                position=tuple(float(value) for value in tracker.position),
+                quaternion_xyzw=matrix_to_quaternion_xyzw(tracker.rotation),
+                fps=fps,
+            )
+
+        if self.retargeting_mode is RetargetingMode.LOWER_BODY_POSITION_ONLY:
+            head = OpenTrackFrame(
+                xyz_cm=(0.0, 0.0, 0.0),
+                ypr_deg=(0.0, 0.0, 0.0),
+                fps=fps,
+            )
+            locomotion_x = 0.0
+            locomotion_y = 0.0
+            locomotion_turn = 0.0
+            tracker_activation = TrackerActivation(left=False, right=False)
+        else:
+            head_position = stabilized_position(self.head_index)
+            head_delta_position = ardy_to_unity_position(
+                (head_position - self._base_head_position) * self._scale
+            )
+            head_rotation = ardy_to_unity_rotation(
+                stabilized_rotation(self.head_index) @ self._base_head_rotation.T
+            )
+            head = OpenTrackFrame(
+                xyz_cm=(
+                    -100.0 * float(head_delta_position[0]),
+                    -100.0 * float(head_delta_position[1]),
+                    100.0 * float(head_delta_position[2]),
+                ),
+                ypr_deg=rotation_matrix_to_opentrack_ypr(head_rotation),
+                fps=fps,
+            )
+            tracker_activation = TrackerActivation()
 
         return SixPointFrame(
             head=head,
-            left=vmt_frame(self.left_index),
-            right=vmt_frame(self.right_index),
-            hips=vmt_frame(self.hips_index),
-            left_foot=vmt_frame(self.left_foot_index),
-            right_foot=vmt_frame(self.right_foot_index),
+            left=retargeted_hand_frame("left"),
+            right=retargeted_hand_frame("right"),
+            hips=retargeted_body_frame(retargeted_lower_body.hips),
+            left_foot=retargeted_body_frame(retargeted_lower_body.left_foot),
+            right_foot=retargeted_body_frame(retargeted_lower_body.right_foot),
             fps=fps,
             scale=self._scale,
             locomotion_x=float(locomotion_x),
             locomotion_y=float(locomotion_y),
             locomotion_turn=float(locomotion_turn),
+            tracker_activation=tracker_activation,
         )

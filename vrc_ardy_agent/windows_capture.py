@@ -116,13 +116,25 @@ class LatestFrameQueue:
         self._lock = threading.Lock()
         self._closed = False
 
-    def publish(self, frame: Any) -> None:
-        copied = frame.copy()
+    def publish(
+        self,
+        frame: Any,
+        *,
+        captured_monotonic_ns: int | None = None,
+    ) -> None:
+        captured_at = (
+            time.monotonic_ns()
+            if captured_monotonic_ns is None
+            else captured_monotonic_ns
+        )
+        if captured_at < 0:
+            raise ValueError("captured_monotonic_ns must be non-negative")
+        packet = _CapturedFrame(frame.copy(), captured_at)
         with self._lock:
             if self._closed:
                 return
             try:
-                self._queue.put_nowait(copied)
+                self._queue.put_nowait(packet)
                 return
             except queue.Full:
                 pass
@@ -130,9 +142,31 @@ class LatestFrameQueue:
                 self._queue.get_nowait()
             except queue.Empty:
                 pass
-            self._queue.put_nowait(copied)
+            self._queue.put_nowait(packet)
 
     def read(self, *, timeout_seconds: float) -> Any:
+        return self._read_packet(timeout_seconds=timeout_seconds).frame
+
+    def read_after(
+        self,
+        *,
+        after_monotonic_ns: int,
+        timeout_seconds: float,
+    ) -> Any:
+        if after_monotonic_ns < 0:
+            raise ValueError("after_monotonic_ns must be non-negative")
+        if timeout_seconds <= 0:
+            raise ValueError("timeout_seconds must be positive")
+        deadline = time.monotonic() + timeout_seconds
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError("no fresh captured frame arrived before the timeout")
+            packet = self._read_packet(timeout_seconds=remaining)
+            if packet.captured_monotonic_ns >= after_monotonic_ns:
+                return packet.frame
+
+    def _read_packet(self, *, timeout_seconds: float) -> _CapturedFrame:
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
         with self._lock:
@@ -149,6 +183,12 @@ class LatestFrameQueue:
     def close(self) -> None:
         with self._lock:
             self._closed = True
+
+
+@dataclass(frozen=True)
+class _CapturedFrame:
+    frame: Any
+    captured_monotonic_ns: int
 
 
 def list_windows(*, title_filter: str | None = None) -> list[WindowInfo]:
@@ -271,6 +311,17 @@ class WindowsGraphicsCaptureSource:
 
     def read(self, *, timeout_seconds: float) -> Any:
         return self._frames.read(timeout_seconds=timeout_seconds)
+
+    def read_after(
+        self,
+        *,
+        after_monotonic_ns: int,
+        timeout_seconds: float,
+    ) -> Any:
+        return self._frames.read_after(
+            after_monotonic_ns=after_monotonic_ns,
+            timeout_seconds=timeout_seconds,
+        )
 
     def close(self) -> None:
         with self._lock:

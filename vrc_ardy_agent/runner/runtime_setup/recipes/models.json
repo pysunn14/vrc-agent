@@ -1,0 +1,230 @@
+[
+  {
+    "repo": "nvidia/ARDY-Core-RP-20FPS-Horizon40",
+    "revision": "abe6c43beb28c867c950acb824b9c4ef3d63fb76",
+    "files": [
+      {
+        "name": "LICENSE",
+        "bytes": 10229,
+        "sha256": null,
+        "git_sha1": "8b5083f79b8856267b2fb16581ebc72e967b2e82"
+      },
+      {
+        "name": "README.md",
+        "bytes": 13081,
+        "sha256": null,
+        "git_sha1": "7bdacb9c0660802ea8e4a0d66862b7a0d16fd893"
+      },
+      {
+        "name": "config.yaml",
+        "bytes": 1560,
+        "sha256": null,
+        "git_sha1": "0928775fbd38635285ef938a15b62013e8a13fbd"
+      },
+      {
+        "name": "denoiser.safetensors",
+        "bytes": 623324336,
+        "sha256": "1019d0bf269cf8d1b3e3e9b4a384a58c112672959b071279ddb65814d77660cd",
+        "git_sha1": "78b038a5a23d47b3275b24fbbbd926e9391a0e06"
+      },
+      {
+        "name": "stats/motion/mean.npy",
+        "bytes": 2800,
+        "sha256": "f04fd87f7b9ce3eab87159e3d4c408261d33e050ce98747de84ea76b0d18538b",
+        "git_sha1": "159e351f2f41808350686744494e4a881cabeb0b"
+      },
+      {
+        "name": "stats/motion/std.npy",
+        "bytes": 2800,
+        "sha256": "0da45d27a9b9f12d66eb5627c7d3920aef09863c4a931bc7fc44522bdbfe957a",
+        "git_sha1": "41abe30c9921b14a6d25ce89151173d446eba4da"
+      },
+      {
+        "name": "stats/post_quantization/mean.npy",
+        "bytes": 640,
+        "sha256": "408066cdfacd021a424ee2eb9dfc9501bfaf0b3136845864588e492148ac9923",
+        "git_sha1": "47f647d4e32ce83ca2958e23afa9445120eaae19"
+      },
+      {
+        "name": "stats/post_quantization/std.npy",
+        "bytes": 640,
+        "sha256": "18786104a1aac8ef0998545afad51ab7e14fc73bddd0c3c736d2ba03342493ea",
+        "git_sha1": "81387ff8701b829aa46fa68d42c0d476a8f8294f"
+      },
+      {
+        "name": "stats/pre_quantization/mean.npy",
+        "bytes": 640,
+        "sha256": "e39c8c10cb32070d4dcdeffbc0161831bdced94bcebbecf49650534d0d8e6d7d",
+        "git_sha1": "f638946ac05c8c5cedc738d3811ce929e69c9174"
+      },
+      {
+        "name": "stats/pre_quantization/std.npy",
+        "bytes": 640,
+        "sha256": "88201690e1d25c97b16a003387e4c2d7bf98b09528b4a3aa6ad460adfb32500e",
+        "git_sha1": "4de2f5d65e82a7c6254ebc036a60c29bc1bf813e"
+      },
+      {
+        "name": "tokenizer.safetensors",
+        "bytes": 141746112,
+        "sha256": "58a887e299a3a6779b5b4ff361b452c4349d45b513b5957f2a961d393623abcd",
+        "git_sha1": "9888fa6124338bba38c699ccb941464f0a31294c"
+      }
+    ]
+  },
+  {
+    "repo": "meta-llama/Meta-Llama-3-8B-Instruct",
+    "revision": "8afb486c1db24fe5011ec46dfbe5b5dccdb575c2",
+    "files": [
+      {
+        "name": "LICENSE",
+        "bytes": 7801,
+        "sha256": null,
+        "git_sha1": "4c763399690c7fec642231350756e4ee9184b5ce"
+      },
+      {
+        "name": "README.md",
+        "bytes": 38854,
+        "sha256": null,
+        "git_sha1": "671db9596dbd5ba6ee039d914b4915d509fc54a5"
+      },
+      {
+        "name": "USE_POLICY.md",
+        "bytes": 4696,
+        "sha256": null,
+        "git_sha1": "6f8e5f6e3243c92046a133c92eb62b1ed7975a0b"
+      },
+      {
+        "name": "config.json",
+        "bytes": 654,
+        "sha256": null,
+        "git_sha1": "31553d63b8f18df5d6d440860751533ada3759e4"
+      },
+      {
+        "name": "generation_config.json",
+        "bytes": 187,
+        "sha256": null,
+        "git_sha1": "8675015d20a4b12ee2ee0197a0937beba318122a"
+      },
+      {
+        "name": "model-00001-of-00004.safetensors",
+        "bytes": 4976698672,
+        "sha256": "d8cf9c4d0dd972e1a2131bfe656235ee98221679711a3beef6d46dadf0f20b5c",
+        "git_sha1": "69e1a8787496ffc0b3818d23d11036ef12e9eb8d"
+      },
+      {
+        "name": "model-00002-of-00004.safetensors",
+        "bytes": 4999802720,
+        "sha256": "8d4782b4a69ef03845159ce1a15e272aadaaf134dc138d68f616098e8531729c",
+        "git_sha1": "3a8b51f9a991e3118837b93445a3f4647125a085"
+      },
+      {
+        "name": "model-00003-of-00004.safetensors",
+        "bytes": 4915916176,
+        "sha256": "3acdd690e65c24f42a24581b8467af98bd3ca357444580f8012aacd2bd607921",
+        "git_sha1": "706b3a174d9f0de9aec8b81231e32f349bfe4fe0"
+      },
+      {
+        "name": "model-00004-of-00004.safetensors",
+        "bytes": 1168138808,
+        "sha256": "67e9ad31c8c32abf3a55ee7fc7217b3ecb35fd3c74d98a5bd233e0e4d6964f46",
+        "git_sha1": "280b9208b3412064a64594f4449cf89dfa014353"
+      },
+      {
+        "name": "model.safetensors.index.json",
+        "bytes": 23950,
+        "sha256": null,
+        "git_sha1": "0fd8120f1c6acddc268ebc2583058efaf699a771"
+      },
+      {
+        "name": "special_tokens_map.json",
+        "bytes": 73,
+        "sha256": null,
+        "git_sha1": "d8cd5076496dbe4be2320312abc10adc43097b81"
+      },
+      {
+        "name": "tokenizer.json",
+        "bytes": 9085698,
+        "sha256": null,
+        "git_sha1": "b197f72effb9d5ed16ee0f5663e11e4cfac2ba62"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "bytes": 50977,
+        "sha256": null,
+        "git_sha1": "1bfd1146b7bde6168de7bb673bfe0acaea6e684c"
+      }
+    ]
+  },
+  {
+    "repo": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp",
+    "revision": "31474e395ada192e8ed1586db6be79fb3b70c9c0",
+    "files": [
+      {
+        "name": "README.md",
+        "bytes": 3315,
+        "sha256": null,
+        "git_sha1": "a5fe1b40358baba7d5bcdc237e0cda36730b28ff"
+      },
+      {
+        "name": "adapter_config.json",
+        "bytes": 794,
+        "sha256": null,
+        "git_sha1": "620ba03108b7ecc5ca38c0683803479b2994bbb2"
+      },
+      {
+        "name": "adapter_model.safetensors",
+        "bytes": 167829552,
+        "sha256": "de9c8736618a13173c6a1623cdef1b75e86c69317f1073ae82cd516ac36a632d",
+        "git_sha1": "db9637a24274d0eed0d6f272a178437c6d1cb943"
+      },
+      {
+        "name": "config.json",
+        "bytes": 781,
+        "sha256": null,
+        "git_sha1": "39f55d1c23baaafa017440d54e8a99fcb62f2500"
+      },
+      {
+        "name": "special_tokens_map.json",
+        "bytes": 335,
+        "sha256": null,
+        "git_sha1": "04829afa78a2d2df203ac846968db37269b01f7f"
+      },
+      {
+        "name": "tokenizer.json",
+        "bytes": 9085671,
+        "sha256": null,
+        "git_sha1": "b32575ff2e452db7c5ce3b1319f3257a49b1d38c"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "bytes": 51042,
+        "sha256": null,
+        "git_sha1": "2fad33212371de0544cc49647a81029f79b4894b"
+      }
+    ]
+  },
+  {
+    "repo": "McGill-NLP/LLM2Vec-Meta-Llama-3-8B-Instruct-mntp-supervised",
+    "revision": "baa8ebf04a1c2500e61288e7dad65e8ae42601a7",
+    "files": [
+      {
+        "name": "README.md",
+        "bytes": 62702,
+        "sha256": null,
+        "git_sha1": "e7791b78b9ad87f11fe2223c191079705c4cd413"
+      },
+      {
+        "name": "adapter_config.json",
+        "bytes": 794,
+        "sha256": null,
+        "git_sha1": "3c1e7117dae8e9be1f773b670ed6fa8cc1dc82ed"
+      },
+      {
+        "name": "adapter_model.safetensors",
+        "bytes": 167829552,
+        "sha256": "53f8f94ebdf396667ba99dd96e78203edae27bbcdbd1cf5f12b611e1d916b225",
+        "git_sha1": "5cff4c5a24c22cfe22fcb5fa5dbaa323d8139712"
+      }
+    ]
+  }
+]

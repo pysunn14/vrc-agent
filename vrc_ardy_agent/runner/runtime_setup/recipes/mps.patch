@@ -1,0 +1,216 @@
+diff --git a/ardy/device.py b/ardy/device.py
+new file mode 100644
+index 0000000..aedf746
+--- /dev/null
++++ b/ardy/device.py
+@@ -0,0 +1,73 @@
++# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++"""Runtime device selection shared by ARDY command-line and demo entry points."""
++
++from __future__ import annotations
++
++from typing import Union
++
++import torch
++
++DeviceLike = Union[str, torch.device]
++
++
++def mps_is_available() -> bool:
++    """Return whether this PyTorch build can currently use the MPS backend."""
++    mps_backend = getattr(torch.backends, "mps", None)
++    return bool(mps_backend is not None and mps_backend.is_available())
++
++
++def available_device_types() -> list[str]:
++    """Available user-facing device types, ordered by ARDY preference."""
++    devices = []
++    if torch.cuda.is_available():
++        devices.append("cuda")
++    if mps_is_available():
++        devices.append("mps")
++    devices.append("cpu")
++    return devices
++
++
++def select_device(device: DeviceLike | None = None) -> str:
++    """Resolve a requested device, defaulting to CUDA, then MPS, then CPU.
++
++    Explicit CUDA/MPS requests fail early when the backend is unavailable,
++    instead of surfacing a less useful tensor-placement error later.
++    """
++    if device is None or str(device).strip().lower() in ("", "auto"):
++        if torch.cuda.is_available():
++            return "cuda"
++        if mps_is_available():
++            return "mps"
++        return "cpu"
++
++    resolved = torch.device(device)
++    if resolved.type == "cuda" and not torch.cuda.is_available():
++        raise RuntimeError(f"CUDA device requested but CUDA is unavailable: {device!r}")
++    if resolved.type == "mps" and not mps_is_available():
++        raise RuntimeError(f"MPS device requested but MPS is unavailable: {device!r}")
++    if resolved.type not in ("cuda", "mps", "cpu"):
++        raise ValueError(f"Unsupported ARDY device {device!r}; choose auto, cuda, mps, or cpu.")
++    return str(resolved)
++
++
++def device_type(device: DeviceLike) -> str:
++    """Return the backend type for a resolved device string/device."""
++    return torch.device(device).type
++
++
++def supports_tensorrt(device: DeviceLike) -> bool:
++    """TensorRT acceleration is meaningful only for CUDA model placement."""
++    return device_type(device) == "cuda"
++
++
++def clear_device_cache(device: DeviceLike) -> None:
++    """Release allocator caches for the selected accelerator when supported."""
++    backend = device_type(device)
++    if backend == "cuda" and torch.cuda.is_available():
++        torch.cuda.synchronize()
++        torch.cuda.empty_cache()
++        torch.cuda.reset_peak_memory_stats()
++    elif backend == "mps" and mps_is_available():
++        torch.mps.synchronize()
++        torch.mps.empty_cache()
+diff --git a/ardy/model/llm2vec/llm2vec.py b/ardy/model/llm2vec/llm2vec.py
+index 3becfa4..fe6a6dd 100644
+--- a/ardy/model/llm2vec/llm2vec.py
++++ b/ardy/model/llm2vec/llm2vec.py
+@@ -55,6 +55,8 @@ from transformers import (
+     Qwen2Config,
+ )
+ 
++from ardy.device import select_device
++
+ logger = logging.getLogger(__name__)
+ 
+ 
+@@ -328,8 +330,7 @@ class LLM2Vec(nn.Module):
+         if isinstance(sentences[0], str):
+             sentences = [[""] + [sentence] for sentence in sentences]
+ 
+-        if device is None:
+-            device = "cuda" if torch.cuda.is_available() else "cpu"
++        device = select_device(device)
+ 
+         concatenated_input_texts = []
+         for sentence in sentences:
+diff --git a/ardy/model/llm2vec/llm2vec_wrapper.py b/ardy/model/llm2vec/llm2vec_wrapper.py
+index 639d1b0..70288fb 100644
+--- a/ardy/model/llm2vec/llm2vec_wrapper.py
++++ b/ardy/model/llm2vec/llm2vec_wrapper.py
+@@ -7,6 +7,8 @@ import os
+ import numpy as np
+ import torch
+ 
++from ardy.device import select_device
++
+ from .llm2vec import LLM2Vec
+ 
+ 
+@@ -40,8 +42,7 @@ class LLM2VecEncoder:
+         env_device = os.environ.get("TEXT_ENCODER_DEVICE")
+         if env_device:
+             device = env_device
+-        if device == "auto":
+-            device = "cuda" if torch.cuda.is_available() else "cpu"
++        device = select_device(device)
+         self._device = device
+         if device is not None:
+             self.model = self.model.to(device)
+@@ -97,5 +98,5 @@ class LLM2VecEncoder:
+             encoded_text = encoded_text[0]
+             lengths = lengths[0]
+ 
+-        encoded_text = torch.tensor(encoded_text).to(self._device)
++        encoded_text = torch.as_tensor(encoded_text, device=self._device)
+         return encoded_text, lengths
+diff --git a/ardy/model/load_model.py b/ardy/model/load_model.py
+index e513936..bd6449b 100644
+--- a/ardy/model/load_model.py
++++ b/ardy/model/load_model.py
+@@ -9,6 +9,8 @@ import torch
+ from huggingface_hub import snapshot_download
+ from omegaconf import OmegaConf
+ 
++from ardy.device import select_device
++
+ from .loading import (
+     DEFAULT_MODEL,
+     DEFAULT_TEXT_ENCODER_URL,
+@@ -122,7 +124,7 @@ def load_text_encoder(
+         url: Remote service URL. When None, falls back to the TEXT_ENCODER_URL
+             env var.
+         fp32: Use float32 instead of the default bfloat16.
+-        device: Target device. When None, uses cuda if available else cpu.
++        device: Target device. When None, uses CUDA, then MPS, then CPU.
+ 
+     Returns:
+         The instantiated text encoder placed on ``device``.
+@@ -150,8 +152,7 @@ def load_text_encoder(
+         conf.pop("device", None)
+         text_encoder = instantiate_from_dict(conf)
+ 
+-    if device is None:
+-        device = "cuda" if torch.cuda.is_available() else "cpu"
++    device = select_device(device)
+     dtype = torch.float32 if fp32 else torch.bfloat16
+     return text_encoder.to(device=device, dtype=dtype)
+ 
+@@ -177,7 +178,7 @@ def load_model(
+ 
+     Args:
+         modelname: Short key or full folder name; uses DEFAULT_MODEL if None.
+-        device: Target device for the model (e.g. 'cuda', 'cpu').
++        device: Target device for the model (e.g. 'cuda', 'mps', 'cpu').
+         eval_mode: If True, set model to eval mode.
+         default_family: Ignored (kept for call-site compatibility).
+         text_encoder: Pre-built text encoder to reuse, or False to load the
+@@ -203,6 +204,7 @@ def load_model(
+     """
+     if modelname is None:
+         modelname = DEFAULT_MODEL
++    device = select_device(device)
+ 
+     # Local dir if CHECKPOINTS_DIR is set (arg or env), otherwise download from HF.
+     checkpoints_dir = checkpoints_dir or get_env_var("CHECKPOINTS_DIR")
+diff --git a/ardy/skeleton/base.py b/ardy/skeleton/base.py
+index 81937e5..a56bf48 100644
+--- a/ardy/skeleton/base.py
++++ b/ardy/skeleton/base.py
+@@ -127,6 +127,30 @@ class SkeletonBase(torch.nn.Module):
+ 
+         self.hip_joint_idx = [self.bone_order_names.index(hip_joint) for hip_joint in self.hip_joint_names]
+ 
++    def _apply(self, fn, recurse=True):
++        """Apply a device/dtype conversion, adapting unsupported float64 MPS buffers.
++
++        Skeleton assets retain their serialized dtype when placed directly on CPU or CUDA.
++        PyTorch's MPS backend cannot represent float64 tensors, so a failed MPS conversion is
++        retried from float32 while preserving any explicit destination dtype requested by ``fn``.
++        Moving that same narrowed module back from MPS cannot restore discarded float64 precision.
++        """
++        def mps_compatible(tensor):
++            try:
++                return fn(tensor)
++            except (RuntimeError, TypeError) as error:
++                message = str(error).lower()
++                is_unsupported_mps_float64 = (
++                    tensor.dtype == torch.float64
++                    and "mps" in message
++                    and ("float64" in message or "double" in message)
++                )
++                if not is_unsupported_mps_float64:
++                    raise
++                return fn(tensor.to(dtype=torch.float32))
++
++        return super()._apply(mps_compatible, recurse=recurse)
++
+     def expand_joint_names(self, joint_names):
+         """Expand base EE names [LeftFoot, RightFoot, LeftHand, RightHand] actual joint names to
+         constrain position and rotations.

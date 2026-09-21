@@ -1,0 +1,23 @@
+# Commands are argument arrays, never shell strings. Services without commands
+# are observed only. Configure the existing runtime environment independently
+# from the lightweight terminal environment.
+
+[services.companion]
+health_url = "http://127.0.0.1:8765/health"
+health_status = "ok"
+# cwd = "/path/to/project"
+# command = ["/path/to/runtime/python", "-u", "scripts/run_companion.py", "--manual-actions-only"]
+# required_files = ["path/to/idle-pose.json", "path/to/motion-frames.json"]
+
+[services.speech_input]
+# health_url = "http://127.0.0.1:8002/health"
+
+[services.speech_output]
+# health_url = "http://127.0.0.1:8001/health"
+
+[services.remote_runtime]
+# Configure the remote service's control endpoint after selecting the host.
+# A local command may launch SSH in the foreground. The remote command must
+# handle SSH disconnects or expose its own lifecycle API; a detached remote
+# process is not owned or stopped by this local runner.
+

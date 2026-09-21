@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vrc-ardy-agent"
+version = "0.1.0"
+description = "Command-line runner and device orchestration for a VRChat agent"
+requires-python = ">=3.11"
+dependencies = [
+    "filelock>=3.16,<4",
+    "keyring>=25.6,<26",
+    "platformdirs>=4,<5",
+    "psutil>=6,<8",
+]
+
+[project.scripts]
+vrc-agent-core = "vrc_ardy_agent.runner.control:main"
+
+[project.optional-dependencies]
+runtime = ["numpy>=1.26", "scipy>=1.11", "websockets>=13,<17", "torch>=2.5"]
+local-stt = ["faster-whisper>=1.2,<2"]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+runtime-test = ["numpy>=1.26", "scipy>=1.11", "websockets>=13,<17", "torch>=2.5"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["vrc_ardy_agent"]
+exclude = ["vrc_ardy_agent/agentctl_*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

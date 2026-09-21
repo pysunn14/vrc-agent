@@ -11,8 +11,22 @@ from uuid import uuid4
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+# The runner can be inspected without loading motion or Windows dependencies.
+if __name__ == "__main__" and sys.argv[1:2] == ["runner"]:
+    from vrc_ardy_agent.agentctl_runner import main as runner_main
+    raise SystemExit(runner_main(sys.argv[2:]))
+
 from vrc_ardy_agent.follow_protocol import TargetObservation, TargetSource
 from vrc_ardy_agent.follow_receiver import UdpObservationReceiver
+from vrc_ardy_agent.agentctl_companion import (
+    add_companion_arguments,
+    run_companion,
+)
+from vrc_ardy_agent.agentctl_pose import (
+    _add_pose_arguments, _build_neutral_pose, _pose_show, _pose_hold,
+)
+from vrc_ardy_agent.agentctl_benchmark import add_benchmark_arguments, run_benchmark_command
+from vrc_ardy_agent.agentctl_replay import add_replay_arguments, run_replay
 from vrc_ardy_agent.windows_capture import (
     WindowsGraphicsCaptureSource,
     list_windows,
@@ -56,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Exploratory control and observation CLI for the VRChat ARDY follower."
     )
     groups = parser.add_subparsers(dest="group", required=True)
+
+    from vrc_ardy_agent.agentctl_runner import configure_agentctl
+    configure_agentctl(groups.add_parser("runner", help="Manage runner processes and preferences"))
+
+    add_benchmark_arguments(groups)
 
     windows = groups.add_parser("windows", help="Inspect or run the Windows perception side")
     windows_commands = windows.add_subparsers(dest="windows_command", required=True)
@@ -109,6 +128,31 @@ def build_parser() -> argparse.ArgumentParser:
     listen.add_argument("--port", type=int, default=9200)
     listen.add_argument("--duration", type=float, default=10.0)
     listen.add_argument("--json", action="store_true")
+
+    pose = groups.add_parser("pose", help="Inspect or stream a calibrated neutral tracking pose")
+    pose_commands = pose.add_subparsers(dest="pose_command", required=True)
+
+    pose_show = pose_commands.add_parser("show", help="Show the resolved room-space pose")
+    _add_pose_arguments(pose_show)
+    pose_show.add_argument("--json", action="store_true")
+
+    pose_hold = pose_commands.add_parser("hold", help="Continuously stream the neutral pose")
+    _add_pose_arguments(pose_hold)
+    pose_hold.add_argument("--host", required=True)
+    pose_hold.add_argument("--duration", type=float, default=10.0)
+    pose_hold.add_argument("--opentrack-port", type=int, default=4242)
+    pose_hold.add_argument("--vmt-port", type=int, default=39570)
+    pose_hold.add_argument("--left-vmt-index", type=int, default=1)
+    pose_hold.add_argument("--right-vmt-index", type=int, default=2)
+    pose_hold.add_argument("--hips-vmt-index", type=int, default=3)
+    pose_hold.add_argument("--left-foot-vmt-index", type=int, default=4)
+    pose_hold.add_argument("--right-foot-vmt-index", type=int, default=5)
+    pose_hold.add_argument("--left-enable", type=int, default=5)
+    pose_hold.add_argument("--right-enable", type=int, default=6)
+    pose_hold.add_argument("--dry-run", action="store_true")
+
+    add_replay_arguments(groups)
+    add_companion_arguments(groups)
     return parser
 
 
@@ -140,7 +184,7 @@ def _add_tracking_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _windows_list(args: argparse.Namespace) -> None:
     windows = list_windows(title_filter=args.title)
-    if args.json:
+    if getattr(args, "json", False):
         for window in windows:
             _print_json({"event": "window", **asdict(window)})
         return
@@ -376,6 +420,15 @@ def _follow_listen(args: argparse.Namespace) -> None:
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.group == "runner":
+        from vrc_ardy_agent.agentctl_runner import run_agentctl
+        raise SystemExit(run_agentctl(args))
+    if args.group == "benchmark":
+        _print_json(run_benchmark_command(args))
+        return
+    if args.group == "replay":
+        run_replay(args)
+        return
     if args.group == "windows":
         if args.windows_command == "list":
             _windows_list(args)
@@ -385,6 +438,15 @@ def main() -> None:
             _windows_nameplate(args)
         else:
             _windows_track(args)
+        return
+    if args.group == "companion":
+        _print_json(run_companion(args))
+        return
+    if args.group == "pose":
+        if args.pose_command == "show":
+            _pose_show(args)
+        else:
+            _pose_hold(args)
         return
     if args.follow_command == "inject":
         _follow_inject(args)

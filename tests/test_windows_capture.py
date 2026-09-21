@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 import unittest
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -118,6 +119,25 @@ class LatestFrameQueueTests(unittest.TestCase):
 
         with self.assertRaises(EOFError):
             frames.read(timeout_seconds=0.01)
+
+    def test_read_after_discards_a_frame_captured_before_the_request(self):
+        frames = LatestFrameQueue()
+        frames.publish(_CopyableFrame(1), captured_monotonic_ns=10)
+        publish_new = threading.Thread(
+            target=lambda: frames.publish(
+                _CopyableFrame(2),
+                captured_monotonic_ns=20,
+            )
+        )
+        publish_new.start()
+
+        frame = frames.read_after(
+            after_monotonic_ns=15,
+            timeout_seconds=0.1,
+        )
+        publish_new.join(timeout=1.0)
+
+        self.assertEqual(frame.value, 2)
 
 
 class _CaptureControl:

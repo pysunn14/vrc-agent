@@ -6,6 +6,7 @@ import unittest
 from vrc_ardy_agent.vmt_input import (
     encode_vmt_button,
     encode_vmt_joystick,
+    encode_vmt_joystick_click,
     encode_vmt_trigger,
 )
 
@@ -43,6 +44,23 @@ class VmtInputTests(unittest.TestCase):
         self.assertAlmostEqual(timeoffset, 0.0)
         self.assertAlmostEqual(value, 0.75)
 
+    def test_joystick_click_packet(self):
+        packet = encode_vmt_joystick_click(
+            index=2,
+            joystick_index=0,
+            timeoffset=0.0,
+            pressed=True,
+        )
+        address, off = read_osc_string(packet)
+        tags, off = read_osc_string(packet, off)
+        self.assertEqual(address, "/VMT/Input/Joystick/Click")
+        self.assertEqual(tags, ",iifi")
+        self.assertEqual(struct.unpack(">ii", packet[off : off + 8]), (2, 0))
+        timeoffset = struct.unpack(">f", packet[off + 8 : off + 12])[0]
+        value = struct.unpack(">i", packet[off + 12 : off + 16])[0]
+        self.assertAlmostEqual(timeoffset, 0.0)
+        self.assertEqual(value, 1)
+
     def test_button_packet(self):
         packet = encode_vmt_button(index=2, button_index=1, timeoffset=0.0, pressed=True)
         address, off = read_osc_string(packet)
@@ -62,6 +80,13 @@ class VmtInputTests(unittest.TestCase):
             encode_vmt_trigger(index=2, trigger_index=0, timeoffset=0.0, value=-0.1)
         with self.assertRaises(ValueError):
             encode_vmt_button(index=2, button_index=8, timeoffset=0.0, pressed=True)
+        with self.assertRaises(ValueError):
+            encode_vmt_joystick_click(
+                index=2,
+                joystick_index=4,
+                timeoffset=0.0,
+                pressed=True,
+            )
 
 
 if __name__ == "__main__":

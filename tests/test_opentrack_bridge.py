@@ -50,8 +50,9 @@ class OpenTrackBridgeTests(unittest.TestCase):
 
             self.assertEqual(len(frames), 2)
             self.assertEqual(frames[0].xyz_cm, (0.0, 0.0, 0.0))
-            # VRto3D converts OpenTrack cm as {-X/100, -Y/100, Z/100} meters.
-            np.testing.assert_allclose(frames[1].xyz_cm, (-10.0, -20.0, 30.0), atol=1e-4)
+            # ARDY X points left, while Unity X points right. The bridge
+            # mirrors it before inverting the VRto3D packet mapping.
+            np.testing.assert_allclose(frames[1].xyz_cm, (10.0, -20.0, 30.0), atol=1e-4)
             np.testing.assert_allclose(frames[1].ypr_deg, (0.0, 0.0, 0.0), atol=1e-6)
             self.assertEqual(frames[1].fps, 20.0)
 
