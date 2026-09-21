@@ -5,6 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "vrc-ardy-agent"
 version = "0.1.0"
+license = "AGPL-3.0-only"
 description = "Command-line runner and device orchestration for a VRChat agent"
 requires-python = ">=3.11"
 dependencies = [
