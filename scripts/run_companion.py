@@ -183,6 +183,8 @@ def route_audio(message, *, pipeline, manual_actions_only):
 
 
 def run(args: argparse.Namespace) -> None:
+    from vrc_ardy_agent.transport_auth import TransportAuth
+    TransportAuth.load()
     if args.heartbeat_interval <= 0:
         raise ValueError("heartbeat interval must be positive")
     profile = apply_runtime_profile(args)

@@ -23,8 +23,11 @@ class Service:
     label: str = ""
     label_ko: str = ""
     timeout: float = 1.0
+    transport_auth: bool = False
 
     def __post_init__(self):
+        if type(self.transport_auth) is not bool:
+            raise ValueError("transport_auth must be a boolean")
         if not re.fullmatch(r"[a-z][a-z0-9_-]{0,47}", self.id):
             raise ValueError("service id must contain lowercase letters, digits, underscores or hyphens")
         if not isinstance(self.command, (list, tuple)) or any(not isinstance(x, str) or not x for x in self.command):

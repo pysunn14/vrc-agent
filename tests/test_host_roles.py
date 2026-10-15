@@ -132,7 +132,6 @@ class HostRoleTests(unittest.TestCase):
                 dispatch("start", {"service": "bridge"}, path=path)
 
     def test_bridge_online_diagnostics_use_device_session_and_do_not_probe_ardy(self):
-        from io import BytesIO
         from vrc_ardy_agent.runner.diagnostics import doctor
         data = role_profile("bridge")
         data["bridge"]["audio_source"] = "microphone"
@@ -147,9 +146,11 @@ class HostRoleTests(unittest.TestCase):
              patch("vrc_ardy_agent.runner.diagnostics.runtime_probe", side_effect=AssertionError("ARDY forbidden")), \
              patch("vrc_ardy_agent.runner.bridge_diagnostics.bridge_probe", return_value=runtime), \
              patch("vrc_ardy_agent.runner.core.Runner.status", return_value=[]), \
-             patch("urllib.request.urlopen", return_value=BytesIO(json.dumps(response).encode())) as opened:
+             patch("vrc_ardy_agent.companion_api.CompanionApiClient") as opened:
+            opened.return_value.status.return_value = response
             rows = doctor(profile)
-        self.assertEqual(opened.call_args.args[0], "http://game-host:8767/status")
+        opened.assert_called_once_with("http://game-host:8767", timeout_seconds=2)
+        opened.return_value.status.assert_called_once_with()
         self.assertTrue(any(row["check"] == "session" and row["result"] == "pass" for row in rows))
         self.assertTrue(any(row["check"] == "tracking" and row["result"] == "pending" for row in rows))
 

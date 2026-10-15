@@ -6,7 +6,9 @@ import threading
 import time
 from typing import Any, Callable
 
-from .follow_protocol import FollowProtocolError, MAX_PACKET_BYTES, TargetObservation, decode_target_observation
+from .follow_auth import FollowPacketAuth, MAX_DATAGRAM_BYTES
+from .transport_auth import TransportAuth
+from .follow_protocol import FollowProtocolError, TargetObservation, decode_target_observation
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,7 @@ class UdpObservationReceiver:
     ) -> None:
         if not 0 <= port <= 65535:
             raise ValueError("port must be in [0, 65535]")
+        self._auth = FollowPacketAuth(TransportAuth.load())
         self.bind_host = bind_host
         self.port = int(port)
         self.store = store or LatestObservationStore()
@@ -147,7 +150,7 @@ class UdpObservationReceiver:
         try:
             while not self._stop_event.is_set():
                 try:
-                    packet, sender = sock.recvfrom(MAX_PACKET_BYTES + 1)
+                    packet, sender = sock.recvfrom(MAX_DATAGRAM_BYTES + 1)
                 except socket.timeout:
                     with self._lock:
                         self._status = replace(
@@ -158,13 +161,14 @@ class UdpObservationReceiver:
 
                 now = time.monotonic()
                 try:
-                    observation = decode_target_observation(packet)
-                except FollowProtocolError:
+                    observation = decode_target_observation(self._auth.open(packet))
+                except FollowProtocolError as exc:
                     with self._lock:
                         self._status = replace(
                             self._status,
                             packets_received=self._status.packets_received + 1,
                             invalid_packets=self._status.invalid_packets + 1,
+                            last_error=str(exc),
                             last_sender=(str(sender[0]), int(sender[1])),
                             heartbeat_monotonic=now,
                         )

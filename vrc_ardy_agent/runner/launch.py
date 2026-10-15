@@ -80,16 +80,16 @@ def runner_config(profile):
         services.append(Service("agent", command=command, cwd=root,
                                 env={"VRC_AGENT_CREDENTIAL_PROFILE": str(profile.path)},
                                 required_files=(root / "scripts" / "run_companion.py", *assets),
-                                health_url=endpoint(profile, "agent") + "/health", health_status="ok"))
+                                health_url=endpoint(profile, "agent") + "/health", health_status="ok", transport_auth=True))
     else:
-        services.append(Service("agent", health_url=endpoint(profile, "agent") + "/health", health_status="ok"))
+        services.append(Service("agent", health_url=endpoint(profile, "agent") + "/health", health_status="ok", transport_auth=True))
     if profile.has_bridge:
         root = local_path(profile, data["bridge"]["project_dir"])
         services.append(Service("bridge", command=tuple(bridge_command(profile, allow_incomplete=True)), cwd=root,
                                 required_files=(root / "scripts" / "run_windows_companion.py",),
-                                health_url=endpoint(profile, "bridge") + "/health", health_status="ok"))
+                                health_url=endpoint(profile, "bridge") + "/health", health_status="ok", transport_auth=True))
     else:
-        services.append(Service("bridge", health_url=endpoint(profile, "bridge") + "/health", health_status="ok"))
+        services.append(Service("bridge", health_url=endpoint(profile, "bridge") + "/health", health_status="ok", transport_auth=True))
     for key, connection in data.get("providers", {}).items():
         deploy = connection["deployment"]
         if deploy["kind"] in ("api", "embedded"): continue

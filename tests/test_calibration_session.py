@@ -73,3 +73,24 @@ def test_output_failure_is_visible_and_never_confirms(session):
     state=s.status({'token':a['token']})
     assert state['state']=='failed' and not state['restored']
     assert state['last_error']
+
+
+def test_owner_secret_is_separate_from_all_observable_device_ids(session):
+    import json
+    import threading
+    from vrc_ardy_agent.status_serialization import to_jsonable
+    from vrc_ardy_agent.windows_companion_api import WindowsCompanionControlService
+    s,g,t,clock,sink=session
+    record=start(s)
+    runtime=SimpleNamespace(snapshot=lambda: {'running':True,'device_plane': {
+        'components': {'gateway':g.snapshot(),'tracker':t.snapshot()}}})
+    api=WindowsCompanionControlService(runtime,shutdown_requested=threading.Event(),calibration=s)
+    assert g.snapshot().session_id is not None
+    assert record['token'] not in json.dumps(to_jsonable(g.snapshot()))
+    assert record['token'] not in json.dumps(api.status())
+    assert record['token'] not in json.dumps(api.health())
+    assert s.status({'token':record['token']})['token']==record['token']
+    s.update({'token':record['token'],'revision':0,'pose':record['pose']})
+    assert record['token'] not in json.dumps(api.status())
+    s.finish({'token':record['token'],'revision':1,'verified':False})
+    assert record['token'] not in json.dumps(api.status())

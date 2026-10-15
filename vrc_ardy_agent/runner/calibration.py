@@ -4,8 +4,6 @@ import hashlib
 import json
 from pathlib import Path
 import re
-import urllib.error
-import urllib.request
 
 from ..asset_contract import local_path, read_json, pose_data
 from ..avatar_config import rig_path, validate_avatar, attest_calibration
@@ -23,15 +21,8 @@ def remote(payload,action,body):
     if not isinstance(host,str) or not re.fullmatch(r'[A-Za-z0-9_.:-]+',host): raise ValueError('invalid Windows address')
     if type(port) is not int or not 1<=port<=65535: raise ValueError('invalid Windows control port')
     host=f'[{host}]' if ':' in host else host
-    request=urllib.request.Request(f'http://{host}:{port}/calibration',
-        data=json.dumps({'action':action,**body},allow_nan=False).encode(),headers={'Content-Type':'application/json'})
-    try:
-        with urllib.request.urlopen(request,timeout=3) as response: return json.load(response)
-    except urllib.error.HTTPError as exc:
-        detail=exc.read(8192).decode(errors='replace')
-        raise RuntimeError(f'Windows calibration HTTP {exc.code}: {detail}') from exc
-    except (OSError,ValueError) as exc:
-        raise RuntimeError(f'Windows calibration connection failed: {exc}') from exc
+    from ..companion_api import CompanionApiClient
+    return CompanionApiClient(f'http://{host}:{port}', timeout_seconds=3).calibrate({'action':action,**body})
 
 
 def checkpoint(avatar,pose,base):

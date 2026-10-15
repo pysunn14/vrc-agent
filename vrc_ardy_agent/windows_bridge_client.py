@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+import inspect
 import threading
 import time
+from urllib.parse import urlsplit
 from typing import Any, Protocol
 
+from .transport_auth import TransportAuth, websocket_logger
 from .stream_protocol import (
     AuthorizeMessage,
     HelloMessage,
@@ -83,6 +86,10 @@ class WindowsBridgeClient:
     ) -> None:
         if not isinstance(url, str) or not url.startswith(("ws://", "wss://")):
             raise ValueError("url must use ws:// or wss://")
+        parsed = urlsplit(url)
+        if not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError("bridge URL must not contain credentials, query, or fragment")
+        self._auth = TransportAuth.load()
         client_instance_id = client_instance_id.strip()
         if not client_instance_id:
             raise ValueError("client_instance_id must not be empty")
@@ -319,12 +326,15 @@ class WindowsBridgeClient:
             ) from exc
         return connect(
             self.url,
-            proxy=None,
+            additional_headers={"Authorization": self._auth.authorization},
+            logger=websocket_logger(),
+            # 13/14 connect directly; disable automatic proxies in newer releases.
+            **({"proxy": None} if "proxy" in inspect.signature(connect).parameters else {}),
             compression=None,
             max_size=MAX_MESSAGE_BYTES,
             open_timeout=self.handshake_timeout_seconds,
-            ping_interval=10,
-            ping_timeout=10,
+            **{name: 10 for name in ("ping_interval", "ping_timeout")
+               if name in inspect.signature(connect).parameters},
         )
 
     def _count_attempt(self) -> None:
@@ -359,5 +369,5 @@ class WindowsBridgeClient:
                     self._status.protocol_errors + (1 if protocol else 0)
                 ),
                 heartbeat_monotonic=time.monotonic(),
-                last_error=error,
+                last_error=self._auth.redact(error),
             )

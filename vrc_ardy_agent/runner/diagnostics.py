@@ -89,11 +89,10 @@ def doctor(profile, *, offline=False, state_dir=None, progress=None):
             rows.append(check(status["id"], "endpoint", "pass" if status["health"]["ok"] else "error", status["health"]["detail"]))
     # Read the local peer's session state. A healthy HTTP listener alone does
     # not establish that the agent and the Windows bridge are communicating.
-    from urllib.request import urlopen
+    from ..companion_api import CompanionApiClient, CompanionApiError
     service = "agent" if profile.has_agent else "bridge"
     try:
-        with urlopen(endpoint(profile, service) + "/status", timeout=2) as response:
-            status = json.loads(response.read(1024*1024))
+        status = CompanionApiClient(endpoint(profile, service), timeout_seconds=2).status()
         if service == "agent":
             bridge_state = status.get("components", {}).get("bridge", {})
         else:
@@ -104,7 +103,7 @@ def doctor(profile, *, offline=False, state_dir=None, progress=None):
             sensor = status.get("sensor_supervisor", {})
             rows.append(check("bridge", "vrchat", "pass" if sensor.get("state") == "RUNNING" else "error", json.dumps(sensor)))
         rows.append(check("bridge", "session", "pass" if bridge_state.get("connected") is True else "error", json.dumps(bridge_state)))
-    except (OSError, ValueError, AttributeError) as exc:
+    except (OSError, ValueError, AttributeError, CompanionApiError) as exc:
         rows.append(check("bridge", "session", "error", f"session state unavailable: {type(exc).__name__}"))
     return rows
 

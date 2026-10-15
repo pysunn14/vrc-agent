@@ -10,6 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from .transport_auth import TransportAuth, authenticated_opener
 from .interaction_runtime import InteractionRuntime
 from .status_serialization import to_jsonable
 
@@ -194,6 +195,7 @@ class CompanionHttpServer(ThreadingHTTPServer):
         server_address: tuple[str, int],
         service: CompanionControlService,
     ) -> None:
+        self.auth = TransportAuth.load()
         self.control_service = service
         super().__init__(server_address, CompanionRequestHandler)
 
@@ -205,7 +207,20 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
     def companion_server(self) -> CompanionHttpServer:
         return self.server  # type: ignore[return-value]
 
+    def _authenticate(self) -> bool:
+        if not self.companion_server.auth.accepts(self.headers):
+            self.close_connection = True
+            self._send_json(HTTPStatus.UNAUTHORIZED, {"error": "authentication_required"})
+            return False
+        if self.headers.get_all("Origin"):
+            self.close_connection = True
+            self._send_json(HTTPStatus.FORBIDDEN, {"error": "browser_origin_not_supported"})
+            return False
+        return True
+
     def do_GET(self) -> None:
+        if not self._authenticate():
+            return
         path = urllib.parse.urlsplit(self.path).path
         service = self.companion_server.control_service
         if path == "/health":
@@ -231,6 +246,8 @@ class CompanionRequestHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "not_found"})
 
     def do_POST(self) -> None:
+        if not self._authenticate():
+            return
         path = urllib.parse.urlsplit(self.path).path
         try:
             payload = self._read_json()
@@ -320,19 +337,23 @@ def create_companion_server(
 class CompanionApiClient:
     def __init__(self, base_url: str, *, timeout_seconds: float = 5.0) -> None:
         parsed = urllib.parse.urlsplit(base_url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise ValueError("base_url must be an absolute HTTP URL")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
         self.base_url = base_url.rstrip("/")
         self.timeout_seconds = timeout_seconds
-        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        self._auth = TransportAuth.load()
+        self._opener = authenticated_opener()
 
     def health(self) -> dict[str, Any]:
         return self._request("GET", "/health")
 
     def status(self) -> dict[str, Any]:
         return self._request("GET", "/status")
+
+    def calibrate(self, payload: object) -> dict[str, Any]:
+        return self._request("POST", "/calibration", payload)
 
     def actions(self) -> dict[str, Any]:
         return self._request("GET", "/actions")
@@ -398,7 +419,7 @@ class CompanionApiClient:
         request = urllib.request.Request(
             self.base_url + path,
             data=data,
-            headers=dict(headers),
+            headers={**headers, "Authorization": self._auth.authorization},
             method=method,
         )
         try:
@@ -406,7 +427,7 @@ class CompanionApiClient:
                 return response.read()
         except urllib.error.HTTPError as exc:
             raw = exc.read()
-            detail = self._error_detail(raw)
+            detail = self._auth.redact(self._error_detail(raw))
             raise CompanionApiError(exc.code, detail) from exc
         except urllib.error.URLError as exc:
             raise CompanionApiError(0, str(exc.reason)) from exc

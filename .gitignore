@@ -16,3 +16,6 @@ dist/
 *.vrm
 *.vrca
 *.psd
+
+# Temporary credential transfer file from the pairing workflow.
+/pairing.key

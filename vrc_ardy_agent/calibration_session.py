@@ -29,6 +29,7 @@ class CalibrationSession:
         self._lock=threading.RLock(); self._record=None; self._deadline=0.; self._sequence=0
         self._stop=threading.Event(); self._thread=None
         self._closed=False
+        self._gateway_session=None
 
     def start_watchdog(self):
         with self._lock:
@@ -53,11 +54,14 @@ class CalibrationSession:
             status=self.tracker.snapshot()
             if not status.running or status.mode!='SAFE': raise RuntimeError('tracker must be running in SAFE mode')
             token=uuid.uuid4().hex
-            self.gateway.claim_exclusive_session(token)
+            # Ownership credentials never enter observable device session/lease IDs.
+            gateway_session = uuid.uuid4().hex
+            self.gateway.claim_exclusive_session(gateway_session)
+            self._gateway_session = gateway_session
             self._record=dict(token=token,request_id=payload['request_id'],state='active',revision=0,
                 pose=pose,hmd_base=self.hmd_base,rig_hash=payload['rig_hash'],restored=False,last_error=None)
             self._sequence=0
-            self.gateway.authorize(token,ResourceLease(RESOURCE,1,token))
+            self.gateway.authorize(self._gateway_session,ResourceLease(RESOURCE,1,self._gateway_session))
             try: self._apply()
             except Exception as exc:
                 self._restore('failed',str(exc)); raise
@@ -70,7 +74,7 @@ class CalibrationSession:
 
     def _apply(self):
         r=self._record
-        decision=self.gateway.apply_envelope(OutputEnvelope(r['token'],r['token'],RESOURCE,1,self._sequence,6000,r['pose']))
+        decision=self.gateway.apply_envelope(OutputEnvelope(self._gateway_session,self._gateway_session,RESOURCE,1,self._sequence,6000,r['pose']))
         if not decision.accepted: raise RuntimeError(f'calibration output rejected: {decision.reason}')
         self._sequence+=1
         r['applied_revision']=self.tracker.flush_target()
@@ -110,12 +114,12 @@ class CalibrationSession:
     def _restore(self,state,error=None):
         r=self._record
         try:
-            result=self.gateway.neutralize(r['token'],RESOURCE,lease_token=1)
+            result=self.gateway.neutralize(self._gateway_session,RESOURCE,lease_token=1)
             if not result.accepted: raise RuntimeError(f'pose restoration rejected: {result.reason}')
             applied=self.tracker.flush_target()
             status=self.tracker.snapshot()
             if status.mode!='SAFE' or status.applied_revision!=applied: raise RuntimeError('SAFE output was not observed')
-            self.gateway.release_exclusive_session(r['token'])
+            self.gateway.release_exclusive_session(self._gateway_session)
             r.update(state=state,restored=True,last_error=error,heartbeat_monotonic=self.clock())
         except Exception as exc:
             # Keep exclusive ownership when restoration fails. Allowing an agent

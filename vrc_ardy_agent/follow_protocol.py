@@ -30,7 +30,10 @@ def _require_plain_int(value: Any, field: str) -> int:
 def _require_number(value: Any, field: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise FollowProtocolError(f"{field} must be numeric")
-    result = float(value)
+    try:
+        result = float(value)
+    except OverflowError as exc:
+        raise FollowProtocolError(f"{field} must be finite") from exc
     if not math.isfinite(result):
         raise FollowProtocolError(f"{field} must be finite")
     return result
@@ -119,7 +122,7 @@ def decode_target_observation(packet: bytes) -> TargetObservation:
         raise FollowProtocolError("packet size is invalid")
     try:
         payload = json.loads(packet.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise FollowProtocolError("packet is not valid UTF-8 JSON") from exc
     if not isinstance(payload, dict):
         raise FollowProtocolError("packet root must be an object")

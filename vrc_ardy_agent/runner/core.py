@@ -10,12 +10,13 @@ import sys
 import threading
 import time
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 from uuid import uuid4
 
 from filelock import FileLock
 import psutil
 
+from ..transport_auth import TransportAuth, authenticated_opener
 from .config import RunnerConfig, Service
 from .records import owned_process, read_record, update_record
 from .settings import atomic_json, state_directory
@@ -25,7 +26,12 @@ def probe(service: Service) -> dict:
     if not service.health_url:
         return {"ok": None, "detail": ""}
     try:
-        with urlopen(service.health_url, timeout=service.timeout) as response:
+        if service.transport_auth:
+            request = Request(service.health_url, headers={"Authorization": TransportAuth.load().authorization})
+            connection = authenticated_opener().open(request, timeout=service.timeout)
+        else:
+            connection = urlopen(service.health_url, timeout=service.timeout)
+        with connection as response:
             if response.status != 200:
                 return {"ok": False, "detail": f"HTTP {response.status}"}
             if service.health_status:

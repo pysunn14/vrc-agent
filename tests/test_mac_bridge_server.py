@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+from vrc_ardy_agent.transport_auth import TransportAuth
 import threading
 import unittest
 from dataclasses import replace
@@ -99,7 +101,8 @@ class MacBridgeServerTests(unittest.TestCase):
 
         with connect(
             f"ws://127.0.0.1:{server.bound_port}",
-            proxy=None,
+            additional_headers={"Authorization": TransportAuth.load().authorization},
+            **({"proxy": None} if "proxy" in inspect.signature(connect).parameters else {}),
         ) as websocket:
             websocket.send(encode_message(HelloMessage("windows-test")))
             opened = decode_message(websocket.recv())
@@ -186,7 +189,8 @@ class MacBridgeServerTests(unittest.TestCase):
 
         with connect(
             f"ws://127.0.0.1:{server.bound_port}",
-            proxy=None,
+            additional_headers={"Authorization": TransportAuth.load().authorization},
+            **({"proxy": None} if "proxy" in inspect.signature(connect).parameters else {}),
         ) as websocket:
             websocket.send(encode_message(HelloMessage("windows-test")))
             self.assertIsInstance(decode_message(websocket.recv()), SessionOpenMessage)

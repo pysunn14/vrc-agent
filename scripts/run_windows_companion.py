@@ -456,6 +456,8 @@ def _run_supervised(args: argparse.Namespace) -> None:
 
 
 def _run(args: argparse.Namespace) -> None:
+    from vrc_ardy_agent.transport_auth import TransportAuth
+    TransportAuth.load()
     if args.heartbeat_interval <= 0:
         raise ValueError("heartbeat interval must be positive")
     has_debug_observer = (

@@ -8,6 +8,8 @@ import time
 from typing import Any, Callable, Protocol
 from uuid import uuid4
 
+from .follow_auth import FollowPacketAuth
+from .transport_auth import TransportAuth
 from .follow_protocol import TargetObservation, TargetSource, encode_target_observation
 from .nameplate import AsyncNameplateTracker
 from .target_fusion import TargetFusionSelector, TargetMeasurement
@@ -68,6 +70,7 @@ class UdpObservationSender:
             raise ValueError("host must not be empty")
         if not 1 <= port <= 65535:
             raise ValueError("port must be in [1, 65535]")
+        self._auth = FollowPacketAuth(TransportAuth.load())
         self._destination = (host, int(port))
         self._socket: socket.socket | None = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -75,7 +78,7 @@ class UdpObservationSender:
         sock = self._socket
         if sock is None:
             raise RuntimeError("sender is closed")
-        sock.sendto(encode_target_observation(observation), self._destination)
+        sock.sendto(self._auth.seal(encode_target_observation(observation)), self._destination)
 
     def close(self) -> None:
         sock = self._socket

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from vrc_ardy_agent.follow_auth import FollowPacketAuth
+from vrc_ardy_agent.transport_auth import TransportAuth
 import socket
 import time
 import unittest
@@ -48,7 +50,7 @@ class UdpObservationReceiverTests(unittest.TestCase):
         try:
             sender.sendto(b"invalid", ("127.0.0.1", receiver.bound_port))
             sender.sendto(
-                encode_target_observation(_observation(sequence=3)),
+                FollowPacketAuth(TransportAuth.load()).seal(encode_target_observation(_observation(sequence=3))),
                 ("127.0.0.1", receiver.bound_port),
             )
 

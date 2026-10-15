@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, replace
+import inspect
 import threading
 import time
 from typing import Any
 import uuid
 
+from .transport_auth import TransportAuth, websocket_logger
 from .mac_input_transport import MacInputTransport
 from .mac_output_transport import MacOutputTransport
 from .stream_protocol import (
@@ -34,6 +36,7 @@ class MacBridgeStatus:
     client_instance_id: str | None = None
     session_id: str | None = None
     connections_opened: int = 0
+    connections_rejected: int = 0
     messages_received: int = 0
     messages_sent: int = 0
     protocol_errors: int = 0
@@ -76,6 +79,7 @@ class MacBridgeServer:
             raise ValueError("handshake_timeout_seconds must be positive")
         if heartbeat_interval_seconds <= 0:
             raise ValueError("heartbeat_interval_seconds must be positive")
+        self._auth = TransportAuth.load()
         self.output = output
         self.input_transport = input_transport
         self.host = host
@@ -101,6 +105,18 @@ class MacBridgeServer:
                 raise RuntimeError("bridge server has not started")
             return self._status.bound_port
 
+    def _authenticate_connection(self, connection: Any, request: Any) -> Any:
+        response = self._auth.websocket_request(connection, request)
+        if response is not None:
+            with self._condition:
+                self._status = replace(
+                    self._status,
+                    connections_rejected=self._status.connections_rejected + 1,
+                    last_error="connection authentication or origin rejected",
+                    heartbeat_monotonic=time.monotonic(),
+                )
+        return response
+
     def start(self) -> None:
         try:
             from websockets.sync.server import serve
@@ -114,10 +130,16 @@ class MacBridgeServer:
                 self._handle_connection,
                 self.host,
                 self.port,
+                process_request=self._authenticate_connection,
+                origins=[None],
+                logger=websocket_logger(),
+                open_timeout=self.handshake_timeout_seconds,
                 compression=None,
                 max_size=MAX_MESSAGE_BYTES,
-                ping_interval=10,
-                ping_timeout=10,
+                # Native ping options arrived after 13.x. Application heartbeats
+                # remain active across the entire supported version range.
+                **{name: 10 for name in ("ping_interval", "ping_timeout")
+                   if name in inspect.signature(serve).parameters},
             )
             bound_host, bound_port = server.socket.getsockname()[:2]
             self._server = server
@@ -162,7 +184,7 @@ class MacBridgeServer:
                     self._status,
                     running=True,
                     heartbeat_monotonic=time.monotonic(),
-                    last_error=error,
+                    last_error=self._auth.redact(error),
                 )
                 self._condition.notify_all()
             raise RuntimeError(error)
@@ -351,7 +373,7 @@ class MacBridgeServer:
                 self._status,
                 protocol_errors=self._status.protocol_errors + 1,
                 heartbeat_monotonic=time.monotonic(),
-                last_error=error,
+                last_error=self._auth.redact(error),
             )
 
     def _record_error(self, error: str) -> None:
@@ -359,5 +381,5 @@ class MacBridgeServer:
             self._status = replace(
                 self._status,
                 heartbeat_monotonic=time.monotonic(),
-                last_error=error,
+                last_error=self._auth.redact(error),
             )

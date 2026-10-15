@@ -16,7 +16,8 @@ class WindowsRequirementsTests(unittest.TestCase):
 
         self.assertFalse(any(requirement.startswith("proc-tap") for requirement in requirements))
         self.assertIn("sounddevice==0.5.6", requirements)
-        self.assertIn("websockets==17.1", requirements)
+        self.assertIn("websockets==16.1.1", requirements)
+        self.assertIn("keyring==25.7.0", requirements)
 
 
 if __name__ == "__main__":

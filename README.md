@@ -211,6 +211,39 @@ vrc-agent connection info
 
 양쪽 장비에서 `onboard`를 실행합니다. 기본 연결 포트는 동작·음성 스트림 `8766`, 에이전트 상태 `8765`, Windows 상태 `8767`입니다. 마법사에서 변경할 수 있으며 두 장비에서 같은 값을 사용해야 합니다. 상태 서버는 설정한 해당 장비 주소로 연결을 받습니다. 이 주소는 상대 장비에서 접속할 수 있어야 합니다.
 
+### 장비 인증 키 설정
+
+에이전트와 Windows 브리지는 같은 256비트 인증 키를 사용합니다. 키가 없거나 읽을 수 없으면 HTTP 제어 서버, 스트림 연결, 보조 follow UDP의 실행이 실패합니다. `/health`를 포함한 모든 제어 경로에 인증이 필요합니다. `enable_test_controls`는 인증된 상대에게 테스트 기능을 허용하는 별도 설정입니다.
+
+양쪽에서 저장소를 설치한 후, **CLI와 런타임을 실행할 운영체제 사용자 계정**으로 키를 설정합니다. `python`은 해당 저장소 의존성이 설치된 Python입니다. 먼저 Mac에서 다음 명령으로 키를 생성합니다. 기존 키가 있으면 덮어쓰지 않습니다.
+
+```sh
+python -m vrc_ardy_agent.transport_auth init --export-file ./pairing.key
+```
+
+키는 Mac의 자격 증명 저장소에 보관되며 화면에 출력되지 않습니다. 전달 파일은 새 파일로만 생성되며 권한은 `0600`입니다. 이 파일을 인증된 암호화 파일 전송으로 Windows 사용자 전용 폴더에 전달합니다. Windows에서 가져오면 Credential Manager에 저장됩니다.
+
+```powershell
+python -m vrc_ardy_agent.transport_auth import --file .\pairing.key
+Remove-Item .\pairing.key
+python -m vrc_ardy_agent.transport_auth check
+```
+
+Mac에서도 전달 파일을 삭제하고 설정을 확인합니다.
+
+```sh
+rm ./pairing.key
+python -m vrc_ardy_agent.transport_auth check
+```
+
+그다음 기존 `vrc-agent` 실행·보정·진단 명령을 사용합니다. 키 자체는 명령행 인자, 프로필, 저장소에 넣지 않습니다. `import`는 기존 키를 명시적으로 교체하므로 키를 바꿀 때는 양쪽 서비스를 중지하고 같은 새 키를 가져온 뒤 재시작합니다. 별도 사용자 계정으로 실행하면 해당 계정에도 설정해야 합니다. 한 Windows 장비에서 통합 실행하는 경우에도 동일한 키를 해당 사용자 자격 증명 저장소에 가져옵니다.
+
+무인 POSIX 계정은 소유자만 읽을 수 있는 키 파일 경로를 `VRC_AGENT_AUTH_FILE` 환경 변수로 지정할 수 있습니다. 이 변수에는 키 값이 아닌 경로만 넣습니다. Windows에서는 운영체제 자격 증명 저장소를 사용합니다. 별도 TOML 서비스의 companion 상태 점검에는 `transport_auth = true`를 설정합니다. 프로필에서 생성한 agent·bridge 서비스에는 자동으로 적용되며, 외부 모델 제공자에게 이 키를 보내지 않습니다.
+
+인증은 전송 암호화를 대신하지 않습니다. 기본 HTTP·WebSocket은 루프백 또는 접근을 제한한 암호화 사설망에서 사용하며 공개 인터넷에 포트를 열지 않습니다. HTTP 클라이언트는 리다이렉트를 따르지 않고, 스트림은 연결 수락 전에 인증하며 브라우저 Origin을 허용하지 않습니다. WebSocket 디버그 로그에는 인증 헤더를 기록하지 않습니다.
+
+보조 follow UDP는 기본 companion 실행과 별도입니다. `run_follow.py`, `run_windows_perception.py`, 개발용 follow 명령도 같은 키를 사용하고, 서명되지 않은 패킷을 받지 않습니다. 패킷 서명, 5초 유효 시간, 실행 중 재전송 검사를 적용하므로 송수신 장비의 시각을 동기화해야 합니다. 재시작하면 재전송 기록은 초기화됩니다. UDP 내용은 암호화하지 않으므로 동일한 사설망 정책이 필요합니다. 거부 건수와 마지막 오류는 수신 상태에서 확인합니다.
+
 ### Windows 브리지 준비와 실행
 
 Windows에도 동일한 저장소와 CLI를 설치하고 `vrc-agent onboard`에서 역할을 선택합니다. 마법사는 선택한 로컬 프로젝트의 `.venv`, `venv`, `runtime`에서 Python을 찾습니다. Windows에서는 `Scripts/python.exe`, Mac·Linux에서는 `bin/python`을 사용합니다. 후보가 없거나 여러 개이면 이유를 표시하고 다른 환경을 선택받습니다. 프로젝트와 Python 경로가 실제로 존재하는지 확인하며, 현재 CLI의 Python을 선택한 경우에도 브리지 의존성 검사는 별도로 수행합니다.
